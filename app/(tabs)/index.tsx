@@ -1,11 +1,12 @@
 import { useState } from "react";
 import {
-  Modal,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Modal,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 
 type Quadrant = "Q1" | "Q2" | "Q3" | "Q4";
@@ -23,6 +24,7 @@ type Task = {
   title: string;
   quadrant: Quadrant;
   values: Value[];
+  dueDate: string;
   completed: boolean;
 };
 
@@ -91,6 +93,7 @@ export default function HomeScreen() {
       title: "Exercise",
       quadrant: "Q2",
       values: ["Health"],
+      dueDate: "",
       completed: false,
     },
   ]);
@@ -99,6 +102,7 @@ export default function HomeScreen() {
   const [taskName, setTaskName] = useState("");
   const [important, setImportant] = useState(true);
   const [urgent, setUrgent] = useState(false);
+  const [dueDate, setDueDate] = useState("");
   const [selectedValues, setSelectedValues] = useState<Value[]>(["Health"]);
 
   const determineQuadrant = (): Quadrant => {
@@ -112,6 +116,7 @@ export default function HomeScreen() {
     setTaskName("");
     setImportant(true);
     setUrgent(false);
+    setDueDate("");
     setSelectedValues(["Health"]);
     setEditingTaskId(null);
     setModalVisible(false);
@@ -122,6 +127,7 @@ export default function HomeScreen() {
     setTaskName("");
     setImportant(true);
     setUrgent(false);
+    setDueDate("");
     setSelectedValues(["Health"]);
     setModalVisible(true);
   };
@@ -131,13 +137,14 @@ export default function HomeScreen() {
     setTaskName(task.title);
     setImportant(task.quadrant === "Q1" || task.quadrant === "Q2");
     setUrgent(task.quadrant === "Q1" || task.quadrant === "Q3");
+    setDueDate(task.dueDate);
     setSelectedValues(task.values);
     setModalVisible(true);
   };
 
   const toggleTaskCompletion = (taskId: string) => {
-    setTasks(
-      tasks.map((task) =>
+    setTasks((currentTasks) =>
+      currentTasks.map((task) =>
         task.id === taskId ? { ...task, completed: !task.completed } : task,
       ),
     );
@@ -156,104 +163,139 @@ export default function HomeScreen() {
 
     const taskValues: Value[] =
       selectedValues.length > 0 ? selectedValues : ["Health"];
-    const updatedTask: Task = {
+    const nextTask: Task = {
       id: editingTaskId ?? Date.now().toString(),
       title: taskName,
       quadrant: determineQuadrant(),
       values: taskValues,
+      dueDate: dueDate.trim(),
       completed: false,
     };
 
     setTasks((currentTasks) => {
       if (editingTaskId) {
         return currentTasks.map((task) =>
-          task.id === editingTaskId ? { ...updatedTask, completed: task.completed } : task,
+          task.id === editingTaskId
+            ? { ...nextTask, completed: task.completed }
+            : task,
         );
       }
 
-      return [...currentTasks, updatedTask];
+      return [...currentTasks, nextTask];
     });
 
     resetForm();
   };
 
+  const activeTasksByQuadrant = QUADRANT_ORDER.reduce(
+    (result, quadrant) => {
+      result[quadrant] = tasks.filter(
+        (task) => task.quadrant === quadrant && !task.completed,
+      );
+      return result;
+    },
+    {} as Record<Quadrant, Task[]>,
+  );
+
+  const completedTasks = tasks.filter((task) => task.completed);
+
+  const renderTaskCard = (task: Task) => (
+    <TouchableOpacity
+      key={task.id}
+      style={styles.taskCard}
+      onPress={() => toggleTaskCompletion(task.id)}
+      onLongPress={() => openTaskForEdit(task)}
+      activeOpacity={0.82}
+    >
+      <View style={styles.taskCardHeader}>
+        <Text
+          style={[
+            styles.taskTitle,
+            task.completed && styles.taskTitleCompleted,
+          ]}
+        >
+          {task.title}
+        </Text>
+        <Text style={styles.taskHint}>
+          {task.completed ? "Tap to restore" : "Tap to complete"}
+        </Text>
+      </View>
+
+      {task.dueDate ? (
+        <Text style={styles.taskDueDate}>Due {task.dueDate}</Text>
+      ) : null}
+
+      <View style={styles.taskTags}>
+        {task.values.map((value) => (
+          <View
+            key={value}
+            style={[
+              styles.taskChip,
+              {
+                backgroundColor: VALUE_STYLES[value].backgroundColor,
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.taskChipText,
+                { color: VALUE_STYLES[value].color },
+              ]}
+            >
+              {value}
+            </Text>
+          </View>
+        ))}
+      </View>
+    </TouchableOpacity>
+  );
+
   return (
     <View style={styles.container}>
-      <Text style={styles.greeting}>Good afternoon, Joyce</Text>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.greeting}>Good afternoon, Joyce</Text>
+        <Text style={styles.title}>Quadrant</Text>
+        <Text style={styles.focusLabel}>Living your values today</Text>
+        <Text style={styles.values}>
+          Health • Family • Growth • Financial Security • Adventure • Community
+        </Text>
 
-      <Text style={styles.title}>Quadrant</Text>
+        <View style={styles.matrix}>
+          {QUADRANT_ORDER.map((quadrant) => {
+            const meta = QUADRANTS[quadrant];
+            const quadrantTasks = activeTasksByQuadrant[quadrant];
 
-      <Text style={styles.focusLabel}>Living your values today</Text>
+            return (
+              <View key={quadrant} style={styles.box}>
+                <Text style={styles.heading}>
+                  {meta.title} ({quadrantTasks.length})
+                </Text>
+                <Text style={styles.label}>{meta.subtitle}</Text>
 
-      <Text style={styles.values}>
-        Health • Family • Growth • Financial Security • Adventure • Community
-      </Text>
+                {quadrantTasks.map(renderTaskCard)}
+              </View>
+            );
+          })}
+        </View>
 
-      <View style={styles.matrix}>
-        {QUADRANT_ORDER.map((quadrant) => {
-          const meta = QUADRANTS[quadrant];
+        <View style={styles.completedSection}>
+          <Text style={styles.completedHeading}>
+            ✓ Completed Today ({completedTasks.length})
+          </Text>
 
-          return (
-            <View key={quadrant} style={styles.box}>
-              <Text style={styles.heading}>{meta.title}</Text>
-              <Text style={styles.label}>{meta.subtitle}</Text>
-
-              {tasks
-                .filter((task) => task.quadrant === quadrant)
-                .map((task) => (
-                  <TouchableOpacity
-                    key={task.id}
-                    style={[
-                      styles.taskCard,
-                      task.completed && styles.taskCardCompleted,
-                    ]}
-                    onPress={() => toggleTaskCompletion(task.id)}
-                    onLongPress={() => openTaskForEdit(task)}
-                    activeOpacity={0.8}
-                  >
-                    <View style={styles.taskCardHeader}>
-                      <Text
-                        style={[
-                          styles.taskTitle,
-                          task.completed && styles.taskTitleCompleted,
-                        ]}
-                      >
-                        {task.title}
-                      </Text>
-                      <Text style={styles.taskHint}>
-                        {task.completed ? "Done" : "Tap to complete"}
-                      </Text>
-                    </View>
-
-                    <View style={styles.taskTags}>
-                      {task.values.map((value) => (
-                        <View
-                          key={value}
-                          style={[
-                            styles.taskChip,
-                            {
-                              backgroundColor:
-                                VALUE_STYLES[value].backgroundColor,
-                            },
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.taskChipText,
-                              { color: VALUE_STYLES[value].color },
-                            ]}
-                          >
-                            {value}
-                          </Text>
-                        </View>
-                      ))}
-                    </View>
-                  </TouchableOpacity>
-                ))}
-            </View>
-          );
-        })}
-      </View>
+          {completedTasks.length === 0 ? (
+            <Text style={styles.completedEmpty}>
+              Completed tasks will appear here.
+            </Text>
+          ) : (
+            completedTasks.map(renderTaskCard)
+          )}
+        </View>
+      </ScrollView>
 
       <TouchableOpacity style={styles.fab} onPress={openNewTask}>
         <Text style={styles.fabText}>+</Text>
@@ -262,41 +304,39 @@ export default function HomeScreen() {
       <Modal visible={modalVisible} animationType="slide" transparent={true}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>New Task</Text>
+            <Text style={styles.modalTitle}>
+              {editingTaskId ? "Edit Task" : "New Task"}
+            </Text>
 
             <TextInput
-              placeholder="What do you need to do?"
+              placeholder="Task name"
+              placeholderTextColor="#A1A1A1"
               value={taskName}
               onChangeText={setTaskName}
               style={styles.input}
             />
 
             <Text style={styles.sectionLabel}>Important?</Text>
-
             <View style={styles.rowChoices}>
               <TouchableOpacity onPress={() => setImportant(true)}>
                 <Text>{important ? "✅ Yes" : "⬜ Yes"}</Text>
               </TouchableOpacity>
-
               <TouchableOpacity onPress={() => setImportant(false)}>
                 <Text>{!important ? "✅ No" : "⬜ No"}</Text>
               </TouchableOpacity>
             </View>
 
             <Text style={styles.sectionLabel}>Urgent?</Text>
-
             <View style={styles.rowChoices}>
               <TouchableOpacity onPress={() => setUrgent(true)}>
                 <Text>{urgent ? "✅ Yes" : "⬜ Yes"}</Text>
               </TouchableOpacity>
-
               <TouchableOpacity onPress={() => setUrgent(false)}>
                 <Text>{!urgent ? "✅ No" : "⬜ No"}</Text>
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.sectionLabel}>Value</Text>
-
+            <Text style={styles.sectionLabel}>Values</Text>
             <View style={styles.valueGrid}>
               {VALUE_OPTIONS.map((value) => {
                 const isSelected = selectedValues.includes(value);
@@ -329,10 +369,16 @@ export default function HomeScreen() {
               })}
             </View>
 
-            <TouchableOpacity
-              style={styles.saveButton}
-              onPress={saveTask}
-            >
+            <Text style={styles.sectionLabel}>Due date</Text>
+            <TextInput
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor="#A1A1A1"
+              value={dueDate}
+              onChangeText={setDueDate}
+              style={styles.input}
+            />
+
+            <TouchableOpacity style={styles.saveButton} onPress={saveTask}>
               <Text style={styles.saveText}>
                 {editingTaskId ? "Update" : "Save"}
               </Text>
@@ -348,8 +394,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#F7F6F3",
+  },
+
+  scrollView: {
+    flex: 1,
+  },
+
+  scrollContent: {
     paddingTop: 70,
     paddingHorizontal: 20,
+    paddingBottom: 130,
   },
 
   title: {
@@ -370,8 +424,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 20,
     padding: 14,
-    minHeight: 200,
-
     shadowColor: "#000",
     shadowOpacity: 0.05,
     shadowRadius: 10,
@@ -379,7 +431,7 @@ const styles = StyleSheet.create({
   },
 
   heading: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: "600",
     color: "#374151",
     marginBottom: 6,
@@ -394,22 +446,23 @@ const styles = StyleSheet.create({
     marginTop: 10,
     gap: 6,
     borderRadius: 16,
-    padding: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
     backgroundColor: "#FAFAF8",
   },
 
-  taskCardCompleted: {
-    opacity: 0.55,
-  },
-
   taskCardHeader: {
-    gap: 4,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
   },
 
   taskTitle: {
     fontSize: 14,
     color: "#2F2F2F",
     lineHeight: 18,
+    flexShrink: 1,
   },
 
   taskTitleCompleted: {
@@ -420,6 +473,12 @@ const styles = StyleSheet.create({
   taskHint: {
     fontSize: 11,
     color: "#9A9A9A",
+    flexShrink: 0,
+  },
+
+  taskDueDate: {
+    fontSize: 11,
+    color: "#7C7C7C",
   },
 
   taskTags: {
@@ -431,12 +490,12 @@ const styles = StyleSheet.create({
   taskChip: {
     alignSelf: "flex-start",
     borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
 
   taskChipText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "600",
   },
 
@@ -458,6 +517,25 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
 
+  completedSection: {
+    marginTop: 26,
+    paddingTop: 18,
+    borderTopWidth: 1,
+    borderTopColor: "#ECE7DD",
+  },
+
+  completedHeading: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: "#2F2F2F",
+    marginBottom: 12,
+  },
+
+  completedEmpty: {
+    fontSize: 14,
+    color: "#8B8B8B",
+  },
+
   fab: {
     position: "absolute",
     right: 24,
@@ -468,7 +546,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#556B4D",
     justifyContent: "center",
     alignItems: "center",
-
     shadowColor: "#000",
     shadowOpacity: 0.15,
     shadowRadius: 12,
@@ -493,6 +570,7 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     borderRadius: 24,
     padding: 24,
+    maxHeight: "86%",
   },
 
   modalTitle: {
