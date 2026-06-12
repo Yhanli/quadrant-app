@@ -1,12 +1,12 @@
 import { useState } from "react";
 import {
-    Modal,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 type Quadrant = "Q1" | "Q2" | "Q3" | "Q4";
@@ -260,9 +260,6 @@ export default function HomeScreen() {
         <Text style={styles.greeting}>Good afternoon, Joyce</Text>
         <Text style={styles.title}>Quadrant</Text>
         <Text style={styles.focusLabel}>Living your values today</Text>
-        <Text style={styles.values}>
-          Health • Family • Growth • Financial Security • Adventure • Community
-        </Text>
 
         <View style={styles.matrix}>
           {QUADRANT_ORDER.map((quadrant) => {
@@ -452,11 +449,8 @@ const styles = StyleSheet.create({
   },
 
   taskCardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 8,
-  },
+  width: "100%"
+}
 
   taskTitle: {
     fontSize: 14,
@@ -470,11 +464,7 @@ const styles = StyleSheet.create({
     color: "#7B7B7B",
   },
 
-  taskHint: {
-    fontSize: 11,
-    color: "#9A9A9A",
-    flexShrink: 0,
-  },
+
 
   taskDueDate: {
     fontSize: 11,
