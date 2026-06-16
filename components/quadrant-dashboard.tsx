@@ -41,6 +41,7 @@ type TaskDraft = {
 type QuadrantContextValue = {
   tasks: Task[];
   toggleTaskCompletion: (taskId: string) => void;
+  addTaskToQuadrant: (quadrant: Quadrant, draft: Omit<TaskDraft, "important" | "urgent">) => void;
   saveTask: (draft: TaskDraft, editingTaskId: string | null) => void;
 };
 
@@ -73,80 +74,7 @@ const VALUE_STYLES: Record<Value, { backgroundColor: string; color: string }> = 
 
 const TASK_STORAGE_KEY = "quadrant_tasks";
 
-const INITIAL_TASKS: Task[] = [
-  {
-    id: "1",
-    title: "Exercise",
-    quadrant: "Q2",
-    values: ["Health"],
-    dueDate: "",
-    completed: false,
-  },
-  {
-    id: "2",
-    title: "Date Night",
-    quadrant: "Q2",
-    values: ["Family", "Adventure"],
-    dueDate: "2026-06-15",
-    completed: false,
-  },
-  {
-    id: "3",
-    title: "Read Book",
-    quadrant: "Q2",
-    values: ["Growth"],
-    dueDate: "",
-    completed: false,
-  },
-  {
-    id: "4",
-    title: "Book appointment with celebrant",
-    quadrant: "Q2",
-    values: ["Family"],
-    dueDate: "2026-06-18",
-    completed: false,
-  },
-  {
-    id: "5",
-    title: "Print wedding sign cards",
-    quadrant: "Q2",
-    values: ["Family", "Growth"],
-    dueDate: "2026-06-20",
-    completed: false,
-  },
-  {
-    id: "6",
-    title: "Plan honeymoon shortlist",
-    quadrant: "Q2",
-    values: ["Adventure", "Family"],
-    dueDate: "",
-    completed: false,
-  },
-  {
-    id: "7",
-    title: "Call Mum",
-    quadrant: "Q2",
-    values: ["Family"],
-    dueDate: "",
-    completed: true,
-  },
-  {
-    id: "8",
-    title: "Pay electricity bill",
-    quadrant: "Q1",
-    values: ["Financial Security"],
-    dueDate: "2026-06-12",
-    completed: false,
-  },
-  {
-    id: "9",
-    title: "Reply to vendor email",
-    quadrant: "Q3",
-    values: ["Community"],
-    dueDate: "2026-06-13",
-    completed: false,
-  },
-];
+const INITIAL_TASKS: Task[] = [];
 
 const QuadrantContext = createContext<QuadrantContextValue | null>(null);
 
@@ -257,22 +185,43 @@ function QuadrantProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  useEffect(() => {
+  const persistTasks = (nextTasks: Task[]) => {
     if (!hasHydrated) return;
 
-    const saveTasks = async () => {
-      try {
-        await AsyncStorage.setItem(TASK_STORAGE_KEY, JSON.stringify(tasks));
-      } catch {
-        // Ignore storage write failures so task interactions still work in-memory.
-      }
-    };
+    void AsyncStorage.setItem(TASK_STORAGE_KEY, JSON.stringify(nextTasks)).catch(() => {
+      // Ignore storage write failures so task interactions still work in-memory.
+    });
+  };
 
-    saveTasks();
-  }, [hasHydrated, tasks]);
+  const updateTasks = (updater: (currentTasks: Task[]) => Task[]) => {
+    setTasks((currentTasks) => {
+      const nextTasks = updater(currentTasks);
+      persistTasks(nextTasks);
+      return nextTasks;
+    });
+  };
+
+  const addTaskToQuadrant = (
+    quadrant: Quadrant,
+    draft: Omit<TaskDraft, "important" | "urgent">,
+  ) => {
+    if (!draft.title.trim()) return;
+
+    updateTasks((currentTasks) => [
+      ...currentTasks,
+      {
+        id: Date.now().toString(),
+        title: draft.title.trim(),
+        quadrant,
+        values: draft.values,
+        dueDate: draft.dueDate.trim(),
+        completed: false,
+      },
+    ]);
+  };
 
   const toggleTaskCompletion = (taskId: string) => {
-    setTasks((currentTasks) =>
+    updateTasks((currentTasks) =>
       currentTasks.map((task) =>
         task.id === taskId ? { ...task, completed: !task.completed } : task,
       ),
@@ -291,7 +240,7 @@ function QuadrantProvider({ children }: { children: ReactNode }) {
       completed: false,
     };
 
-    setTasks((currentTasks) => {
+    updateTasks((currentTasks) => {
       if (editingTaskId) {
         return currentTasks.map((task) =>
           task.id === editingTaskId ? { ...nextTask, completed: task.completed } : task,
@@ -303,7 +252,7 @@ function QuadrantProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <QuadrantContext.Provider value={{ tasks, toggleTaskCompletion, saveTask }}>
+    <QuadrantContext.Provider value={{ tasks, toggleTaskCompletion, addTaskToQuadrant, saveTask }}>
       {children}
     </QuadrantContext.Provider>
   );
@@ -453,6 +402,91 @@ function TaskEditorModal({
   );
 }
 
+function QuadrantTaskComposer({
+  quadrant,
+  onAddTask,
+}: {
+  quadrant: Quadrant;
+  onAddTask: (title: string, values: Value[], dueDate: string) => void;
+}) {
+  const [taskTitle, setTaskTitle] = useState("");
+  const [taskValues, setTaskValues] = useState<Value[]>([]);
+  const [taskDueDate, setTaskDueDate] = useState("");
+
+  const toggleComposerValue = (value: Value) => {
+    setTaskValues((currentValues) =>
+      currentValues.includes(value)
+        ? currentValues.filter((currentValue) => currentValue !== value)
+        : [...currentValues, value],
+    );
+  };
+
+  const submitTask = () => {
+    onAddTask(taskTitle, taskValues, taskDueDate);
+    setTaskTitle("");
+    setTaskValues([]);
+    setTaskDueDate("");
+  };
+
+  return (
+    <View style={styles.composerCard}>
+      <Text style={styles.composerLabel}>Add a task to this quadrant</Text>
+      <TextInput
+        placeholder={`Write a task for ${QUADRANTS[quadrant].title}`}
+        placeholderTextColor="#A1A1A1"
+        value={taskTitle}
+        onChangeText={setTaskTitle}
+        style={styles.composerInput}
+        returnKeyType="done"
+        onSubmitEditing={submitTask}
+      />
+
+      <Text style={styles.composerSectionLabel}>Values, if relevant</Text>
+      <View style={styles.valueGrid}>
+        {VALUE_OPTIONS.map((value) => {
+          const isSelected = taskValues.includes(value);
+
+          return (
+            <Pressable
+              key={value}
+              onPress={() => toggleComposerValue(value)}
+              style={[styles.valueOption, isSelected && styles.valueOptionSelected]}
+            >
+              <View
+                style={[
+                  styles.valueDot,
+                  { backgroundColor: VALUE_STYLES[value].backgroundColor },
+                ]}
+              />
+              <Text
+                style={[
+                  styles.valueOptionText,
+                  isSelected && styles.valueOptionTextSelected,
+                ]}
+              >
+                {value}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      <Text style={styles.composerSectionLabel}>Due date</Text>
+      <TextInput
+        placeholder="YYYY-MM-DD"
+        placeholderTextColor="#A1A1A1"
+        value={taskDueDate}
+        onChangeText={setTaskDueDate}
+        style={styles.composerInput}
+      />
+
+      <Pressable style={styles.composerButton} onPress={submitTask}>
+        <Text style={styles.composerButtonText}>Add task</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 function QuadrantSummaryCard({ quadrant }: { quadrant: Quadrant }) {
   const { tasks } = useQuadrantData();
   const meta = QUADRANTS[quadrant];
@@ -485,7 +519,6 @@ function QuadrantSummaryCard({ quadrant }: { quadrant: Quadrant }) {
 
 export function HomeScreen() {
   const { tasks, toggleTaskCompletion, saveTask } = useQuadrantData();
-  const [modalVisible, setModalVisible] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   const completedTasks = tasks.filter((task) => task.completed);
@@ -525,26 +558,14 @@ export function HomeScreen() {
         </View>
       </ScrollView>
 
-      <Pressable
-        style={styles.fab}
-        onPress={() => {
-          setEditingTask(null);
-          setModalVisible(true);
-        }}
-      >
-        <Text style={styles.fabText}>+</Text>
-      </Pressable>
-
       <TaskEditorModal
-        visible={modalVisible || editingTask !== null}
+        visible={editingTask !== null}
         task={editingTask}
         onClose={() => {
-          setModalVisible(false);
           setEditingTask(null);
         }}
         onSubmit={(draft, editingTaskId) => {
           saveTask(draft, editingTaskId);
-          setModalVisible(false);
           setEditingTask(null);
         }}
       />
@@ -555,7 +576,7 @@ export function HomeScreen() {
 export function QuadrantDetailScreen() {
   const params = useLocalSearchParams<{ quadrant?: string | string[] }>();
   const quadrantParam = Array.isArray(params.quadrant) ? params.quadrant[0] : params.quadrant;
-  const { tasks, toggleTaskCompletion, saveTask } = useQuadrantData();
+  const { tasks, toggleTaskCompletion, addTaskToQuadrant, saveTask } = useQuadrantData();
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   if (!isQuadrant(quadrantParam)) {
@@ -574,31 +595,45 @@ export function QuadrantDetailScreen() {
 
   return (
     <View style={styles.detailContainer}>
-      <View style={styles.detailHeaderRow}>
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
-          <Text style={styles.backButtonText}>← Back</Text>
-        </Pressable>
-      </View>
+      <ScrollView
+        style={styles.detailScroll}
+        contentContainerStyle={styles.detailContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.detailHeaderRow}>
+          <Pressable style={styles.backButton} onPress={() => router.back()}>
+            <Text style={styles.backButtonText}>← Back</Text>
+          </Pressable>
+        </View>
 
-      <Text style={styles.detailTitle}>{meta.title}</Text>
-      <Text style={styles.detailDescription}>{meta.subtitle}</Text>
+        <Text style={styles.detailTitle}>{meta.title}</Text>
+        <Text style={styles.detailDescription}>{meta.subtitle}</Text>
 
-      <View style={styles.detailSection}>
-        <Text style={styles.detailSectionTitle}>All tasks ({quadrantTasks.length})</Text>
+        <QuadrantTaskComposer
+          quadrant={quadrantParam}
+          onAddTask={(title, values, dueDate) =>
+            addTaskToQuadrant(quadrantParam, { title, values, dueDate })
+          }
+        />
 
-        {quadrantTasks.length === 0 ? (
-          <Text style={styles.emptyState}>No tasks in this quadrant yet.</Text>
-        ) : (
-          quadrantTasks.map((task) => (
-            <TaskCard
-              key={task.id}
-              task={task}
-              onPress={() => toggleTaskCompletion(task.id)}
-              onLongPress={() => setEditingTask(task)}
-            />
-          ))
-        )}
-      </View>
+        <View style={styles.detailSection}>
+          <Text style={styles.detailSectionTitle}>All tasks ({quadrantTasks.length})</Text>
+
+          {quadrantTasks.length === 0 ? (
+            <Text style={styles.emptyState}>No tasks in this quadrant yet.</Text>
+          ) : (
+            quadrantTasks.map((task) => (
+              <TaskCard
+                key={task.id}
+                task={task}
+                onPress={() => toggleTaskCompletion(task.id)}
+                onLongPress={() => setEditingTask(task)}
+              />
+            ))
+          )}
+        </View>
+      </ScrollView>
 
       <TaskEditorModal
         visible={editingTask !== null}
@@ -680,6 +715,48 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     paddingLeft: 2,
   },
+  composerCard: {
+    marginTop: 16,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 14,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  composerLabel: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#2F2F2F",
+    marginBottom: 10,
+  },
+  composerSectionLabel: {
+    marginBottom: 8,
+    color: "#3F3F3F",
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  composerInput: {
+    borderWidth: 1,
+    borderColor: "#E5E5E5",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 14,
+    backgroundColor: "#FAFAF8",
+  },
+  composerButton: {
+    backgroundColor: "#556B4D",
+    padding: 14,
+    borderRadius: 14,
+    alignItems: "center",
+    marginTop: 2,
+  },
+  composerButtonText: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "600",
+  },
   taskCard: {
     marginTop: 10,
     gap: 6,
@@ -745,26 +822,6 @@ const styles = StyleSheet.create({
   completedEmpty: {
     fontSize: 14,
     color: "#8B8B8B",
-  },
-  fab: {
-    position: "absolute",
-    right: 24,
-    bottom: 40,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: "#556B4D",
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  fabText: {
-    color: "white",
-    fontSize: 32,
-    marginTop: -2,
   },
   modalOverlay: {
     flex: 1,
@@ -850,9 +907,14 @@ const styles = StyleSheet.create({
   detailContainer: {
     flex: 1,
     backgroundColor: "#F7F6F3",
+  },
+  detailScroll: {
+    flex: 1,
+  },
+  detailContent: {
     paddingTop: 64,
     paddingHorizontal: 20,
-    paddingBottom: 32,
+    paddingBottom: 40,
   },
   detailHeaderRow: {
     flexDirection: "row",
