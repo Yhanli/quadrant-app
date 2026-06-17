@@ -167,7 +167,8 @@ function QuadrantProvider({ children }: { children: ReactNode }) {
         } else {
           setTasks(INITIAL_TASKS);
         }
-      } catch {
+      } catch (error) {
+        console.warn("Failed to load tasks from storage", error);
         if (isMounted) {
           setTasks(INITIAL_TASKS);
         }
@@ -188,8 +189,11 @@ function QuadrantProvider({ children }: { children: ReactNode }) {
   const persistTasks = (nextTasks: Task[]) => {
     if (!hasHydrated) return;
 
-    void AsyncStorage.setItem(TASK_STORAGE_KEY, JSON.stringify(nextTasks)).catch(() => {
-      // Ignore storage write failures so task interactions still work in-memory.
+    void AsyncStorage.setItem(TASK_STORAGE_KEY, JSON.stringify(nextTasks)).catch((error) => {
+      // Keep task interactions working in-memory, but surface the failure so a
+      // broken storage layer doesn't silently lose data (as it did when the
+      // AsyncStorage version was incompatible with the Expo SDK).
+      console.warn("Failed to persist tasks to storage", error);
     });
   };
 
