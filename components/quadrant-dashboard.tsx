@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useLocalSearchParams } from "expo-router";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import {
+    AppState,
     Modal,
     Pressable,
     ScrollView,
@@ -10,6 +11,9 @@ import {
     TextInput,
     View,
 } from "react-native";
+
+import { useAuth } from "@/components/auth-provider";
+import { supabase } from "@/lib/supabase";
 
 export type Quadrant = "Q1" | "Q2" | "Q3" | "Q4";
 
@@ -149,110 +153,210 @@ function TaskCard({
   );
 }
 
+type TaskRow = {
+  id: string;
+  title: string;
+  quadrant: Quadrant;
+  task_values: Value[] | null;
+  due_date: string | null;
+  completed: boolean;
+  created_at: string;
+};
+
+const TASK_COLUMNS = "id, title, quadrant, task_values, due_date, completed, created_at";
+
+function rowToTask(row: TaskRow): Task {
+  return {
+    id: row.id,
+    title: row.title,
+    quadrant: row.quadrant,
+    values: row.task_values ?? [],
+    dueDate: row.due_date ?? "",
+    completed: row.completed,
+  };
+}
+
+function cacheKey(userId: string) {
+  return `${TASK_STORAGE_KEY}_${userId}`;
+}
+
+function fetchTasks() {
+  return supabase.from("tasks").select(TASK_COLUMNS).order("created_at", { ascending: true });
+}
+
 function QuadrantProvider({ children }: { children: ReactNode }) {
+  const { session } = useAuth();
+  const userId = session?.user.id ?? null;
   const [tasks, setTasks] = useState<Task[]>(INITIAL_TASKS);
   const [hasHydrated, setHasHydrated] = useState(false);
 
+  // Load tasks: show the cached copy instantly (works offline), then refresh
+  // from Supabase so other devices' changes appear.
   useEffect(() => {
-    let isMounted = true;
+    if (!userId) {
+      setTasks(INITIAL_TASKS);
+      setHasHydrated(false);
+      return;
+    }
+
+    let isActive = true;
+    setHasHydrated(false);
 
     const loadTasks = async () => {
       try {
-        const storedTasks = await AsyncStorage.getItem(TASK_STORAGE_KEY);
-
-        if (!isMounted) return;
-
-        if (storedTasks) {
-          setTasks(JSON.parse(storedTasks) as Task[]);
-        } else {
-          setTasks(INITIAL_TASKS);
+        const cached = await AsyncStorage.getItem(cacheKey(userId));
+        if (isActive && cached) {
+          setTasks(JSON.parse(cached) as Task[]);
         }
       } catch (error) {
-        console.warn("Failed to load tasks from storage", error);
-        if (isMounted) {
-          setTasks(INITIAL_TASKS);
-        }
-      } finally {
-        if (isMounted) {
-          setHasHydrated(true);
-        }
+        console.warn("Failed to read cached tasks", error);
       }
+
+      const { data, error } = await fetchTasks();
+      if (!isActive) return;
+
+      if (error) {
+        console.warn("Failed to fetch tasks from Supabase", error);
+      } else {
+        setTasks((data as TaskRow[]).map(rowToTask));
+      }
+
+      setHasHydrated(true);
     };
 
-    loadTasks();
+    void loadTasks();
 
     return () => {
-      isMounted = false;
+      isActive = false;
     };
-  }, []);
+  }, [userId]);
 
-  const persistTasks = (nextTasks: Task[]) => {
-    if (!hasHydrated) return;
+  // Mirror the latest tasks into AsyncStorage so a cold start (or no network)
+  // shows the last-known list immediately.
+  useEffect(() => {
+    if (!userId || !hasHydrated) return;
 
-    void AsyncStorage.setItem(TASK_STORAGE_KEY, JSON.stringify(nextTasks)).catch((error) => {
-      // Keep task interactions working in-memory, but surface the failure so a
-      // broken storage layer doesn't silently lose data (as it did when the
-      // AsyncStorage version was incompatible with the Expo SDK).
-      console.warn("Failed to persist tasks to storage", error);
+    void AsyncStorage.setItem(cacheKey(userId), JSON.stringify(tasks)).catch((error) => {
+      console.warn("Failed to cache tasks", error);
     });
-  };
+  }, [tasks, userId, hasHydrated]);
 
-  const updateTasks = (updater: (currentTasks: Task[]) => Task[]) => {
-    setTasks((currentTasks) => {
-      const nextTasks = updater(currentTasks);
-      persistTasks(nextTasks);
-      return nextTasks;
+  // Refresh from the server whenever the app returns to the foreground, so a
+  // task added on another device shows up here.
+  useEffect(() => {
+    if (!userId) return;
+
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state !== "active") return;
+
+      void fetchTasks().then(({ data, error }) => {
+        if (error) {
+          console.warn("Failed to refresh tasks", error);
+          return;
+        }
+        setTasks((data as TaskRow[]).map(rowToTask));
+      });
     });
-  };
 
-  const addTaskToQuadrant = (
+    return () => subscription.remove();
+  }, [userId]);
+
+  const addTaskToQuadrant = async (
     quadrant: Quadrant,
     draft: Omit<TaskDraft, "important" | "urgent">,
   ) => {
-    if (!draft.title.trim()) return;
+    if (!draft.title.trim() || !userId) return;
 
-    updateTasks((currentTasks) => [
-      ...currentTasks,
-      {
-        id: Date.now().toString(),
+    const { data, error } = await supabase
+      .from("tasks")
+      .insert({
+        user_id: userId,
         title: draft.title.trim(),
         quadrant,
-        values: draft.values,
-        dueDate: draft.dueDate.trim(),
+        task_values: draft.values,
+        due_date: draft.dueDate.trim() || null,
         completed: false,
-      },
-    ]);
+      })
+      .select(TASK_COLUMNS)
+      .single();
+
+    if (error || !data) {
+      console.warn("Failed to add task", error);
+      return;
+    }
+
+    setTasks((currentTasks) => [...currentTasks, rowToTask(data as TaskRow)]);
   };
 
-  const toggleTaskCompletion = (taskId: string) => {
-    updateTasks((currentTasks) =>
+  const toggleTaskCompletion = async (taskId: string) => {
+    const target = tasks.find((task) => task.id === taskId);
+    if (!target) return;
+
+    const nextCompleted = !target.completed;
+    // Optimistic update so the UI reacts instantly; revert if the write fails.
+    setTasks((currentTasks) =>
       currentTasks.map((task) =>
-        task.id === taskId ? { ...task, completed: !task.completed } : task,
+        task.id === taskId ? { ...task, completed: nextCompleted } : task,
       ),
     );
+
+    const { error } = await supabase
+      .from("tasks")
+      .update({ completed: nextCompleted })
+      .eq("id", taskId);
+
+    if (error) {
+      console.warn("Failed to update task completion", error);
+      setTasks((currentTasks) =>
+        currentTasks.map((task) =>
+          task.id === taskId ? { ...task, completed: target.completed } : task,
+        ),
+      );
+    }
   };
 
-  const saveTask = (draft: TaskDraft, editingTaskId: string | null) => {
-    if (!draft.title.trim()) return;
+  const saveTask = async (draft: TaskDraft, editingTaskId: string | null) => {
+    if (!draft.title.trim() || !userId) return;
 
-    const nextTask: Task = {
-      id: editingTaskId ?? Date.now().toString(),
-      title: draft.title.trim(),
-      quadrant: determineQuadrant(draft.important, draft.urgent),
-      values: draft.values.length > 0 ? draft.values : ["Health"],
-      dueDate: draft.dueDate.trim(),
-      completed: false,
+    const title = draft.title.trim();
+    const quadrant = determineQuadrant(draft.important, draft.urgent);
+    const values = draft.values.length > 0 ? draft.values : (["Health"] as Value[]);
+    const dueDate = draft.dueDate.trim();
+
+    const dbFields = {
+      title,
+      quadrant,
+      task_values: values,
+      due_date: dueDate || null,
     };
 
-    updateTasks((currentTasks) => {
-      if (editingTaskId) {
-        return currentTasks.map((task) =>
-          task.id === editingTaskId ? { ...nextTask, completed: task.completed } : task,
-        );
-      }
+    if (editingTaskId) {
+      // Optimistic edit; completion state is left untouched.
+      setTasks((currentTasks) =>
+        currentTasks.map((task) =>
+          task.id === editingTaskId ? { ...task, title, quadrant, values, dueDate } : task,
+        ),
+      );
 
-      return [...currentTasks, nextTask];
-    });
+      const { error } = await supabase.from("tasks").update(dbFields).eq("id", editingTaskId);
+      if (error) {
+        console.warn("Failed to update task", error);
+      }
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("tasks")
+      .insert({ user_id: userId, ...dbFields, completed: false })
+      .select(TASK_COLUMNS)
+      .single();
+
+    if (error || !data) {
+      console.warn("Failed to create task", error);
+      return;
+    }
+
+    setTasks((currentTasks) => [...currentTasks, rowToTask(data as TaskRow)]);
   };
 
   return (
@@ -523,9 +627,11 @@ function QuadrantSummaryCard({ quadrant }: { quadrant: Quadrant }) {
 
 export function HomeScreen() {
   const { tasks, toggleTaskCompletion, saveTask } = useQuadrantData();
+  const { session, signOut } = useAuth();
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   const completedTasks = tasks.filter((task) => task.completed);
+  const displayName = session?.user.email?.split("@")[0] ?? "there";
 
   return (
     <View style={styles.container}>
@@ -534,7 +640,12 @@ export function HomeScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.greeting}>Good afternoon, Joyce</Text>
+        <View style={styles.headerRow}>
+          <Text style={styles.greeting}>Hello, {displayName}</Text>
+          <Pressable onPress={signOut} hitSlop={8}>
+            <Text style={styles.signOutText}>Sign out</Text>
+          </Pressable>
+        </View>
         <Text style={styles.title}>Quadrant</Text>
         <Text style={styles.focusLabel}>Living your values today</Text>
 
@@ -801,10 +912,20 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "600",
   },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
   greeting: {
     fontSize: 16,
     color: "#8B8B8B",
-    marginBottom: 8,
+  },
+  signOutText: {
+    fontSize: 14,
+    color: "#556B4D",
+    fontWeight: "600",
   },
   focusLabel: {
     fontSize: 14,
