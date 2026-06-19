@@ -607,18 +607,21 @@ function QuadrantTaskComposer({
   );
 }
 
-function QuadrantSummaryCard({ quadrant }: { quadrant: Quadrant }) {
-  const { tasks } = useQuadrantData();
+function QuadrantSummaryCard({
+  quadrant,
+  onEditTask,
+}: {
+  quadrant: Quadrant;
+  onEditTask: (task: Task) => void;
+}) {
+  const { tasks, toggleTaskCompletion } = useQuadrantData();
   const meta = QUADRANTS[quadrant];
   const quadrantTasks = tasks.filter((task) => task.quadrant === quadrant);
   const previewTasks = getPreviewTasks(quadrantTasks);
   const moreCount = getMoreCount(quadrantTasks);
 
   return (
-    <Pressable
-      style={({ pressed }) => [styles.box, pressed ? styles.pressedSummaryCard : null]}
-      onPress={() => router.push(`/quadrant/${quadrant}`)}
-    >
+    <View style={styles.box}>
       <Text style={styles.heading}>
         {meta.title} ({quadrantTasks.length})
       </Text>
@@ -626,14 +629,25 @@ function QuadrantSummaryCard({ quadrant }: { quadrant: Quadrant }) {
 
       <View style={styles.previewStack}>
         {previewTasks.map((task) => (
-          <View key={task.id} style={styles.previewTaskCard}>
+          // Tap to complete, long-press to edit — no screen change.
+          <Pressable
+            key={task.id}
+            style={({ pressed }) => [styles.previewTaskCard, pressed ? styles.pressedCard : null]}
+            onPress={() => toggleTaskCompletion(task.id)}
+            onLongPress={() => onEditTask(task)}
+          >
             <TaskCardContent task={task} />
-          </View>
+          </Pressable>
         ))}
 
-        {moreCount > 0 ? <Text style={styles.moreText}>+{moreCount} more</Text> : null}
+        {/* The detail screen is only needed to reach tasks hidden by the preview. */}
+        {moreCount > 0 ? (
+          <Pressable onPress={() => router.push(`/quadrant/${quadrant}`)} hitSlop={6}>
+            <Text style={styles.moreText}>+{moreCount} more →</Text>
+          </Pressable>
+        ) : null}
       </View>
-    </Pressable>
+    </View>
   );
 }
 
@@ -653,9 +667,15 @@ export function HomeScreen() {
   const { tasks, toggleTaskCompletion, saveTask } = useQuadrantData();
   const { session, signOut } = useAuth();
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [composing, setComposing] = useState(false);
 
   const completedToday = tasks.filter(isCompletedToday);
   const displayName = session?.user.email?.split("@")[0] ?? "there";
+
+  const closeEditor = () => {
+    setEditingTask(null);
+    setComposing(false);
+  };
 
   return (
     <View style={styles.container}>
@@ -675,7 +695,7 @@ export function HomeScreen() {
 
         <View style={styles.matrix}>
           {QUADRANT_ORDER.map((quadrant) => (
-            <QuadrantSummaryCard key={quadrant} quadrant={quadrant} />
+            <QuadrantSummaryCard key={quadrant} quadrant={quadrant} onEditTask={setEditingTask} />
           ))}
         </View>
 
@@ -697,15 +717,21 @@ export function HomeScreen() {
         </View>
       </ScrollView>
 
+      <Pressable
+        style={({ pressed }) => [styles.fab, pressed ? styles.fabPressed : null]}
+        onPress={() => setComposing(true)}
+        accessibilityLabel="Add a task"
+      >
+        <Text style={styles.fabIcon}>＋</Text>
+      </Pressable>
+
       <TaskEditorModal
-        visible={editingTask !== null}
+        visible={editingTask !== null || composing}
         task={editingTask}
-        onClose={() => {
-          setEditingTask(null);
-        }}
+        onClose={closeEditor}
         onSubmit={(draft, editingTaskId) => {
           saveTask(draft, editingTaskId);
-          setEditingTask(null);
+          closeEditor();
         }}
       />
     </View>
@@ -825,8 +851,30 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 2,
   },
-  pressedSummaryCard: {
+  fab: {
+    position: "absolute",
+    right: 24,
+    bottom: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#556B4D",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 5,
+  },
+  fabPressed: {
     opacity: 0.9,
+  },
+  fabIcon: {
+    color: "#FFFFFF",
+    fontSize: 30,
+    lineHeight: 34,
+    fontWeight: "400",
   },
   heading: {
     fontSize: 20,
