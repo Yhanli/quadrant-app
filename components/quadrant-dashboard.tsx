@@ -1,19 +1,26 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useLocalSearchParams } from "expo-router";
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import {
+    Animated,
     AppState,
     Modal,
+    Platform,
     Pressable,
     ScrollView,
     StyleSheet,
+    Switch,
     Text,
     TextInput,
     View,
 } from "react-native";
 
 import { useAuth } from "@/components/auth-provider";
+import { DateField } from "@/components/date-field";
+import { formatDueDate } from "@/lib/date";
 import { supabase } from "@/lib/supabase";
+
+const USE_NATIVE_DRIVER = Platform.OS !== "web";
 
 export type Quadrant = "Q1" | "Q2" | "Q3" | "Q4";
 
@@ -113,7 +120,9 @@ function TaskCardContent({ task }: { task: Task }) {
         {task.title}
       </Text>
 
-      {task.dueDate ? <Text style={styles.taskDueDate}>Due {task.dueDate}</Text> : null}
+      {task.dueDate ? (
+        <Text style={styles.taskDueDate}>Due {formatDueDate(task.dueDate)}</Text>
+      ) : null}
 
       <View style={styles.taskTags}>
         {task.values.map((value) => (
@@ -388,6 +397,42 @@ export function useQuadrantData() {
   return context;
 }
 
+function ValueChip({
+  value,
+  selected,
+  onToggle,
+}: {
+  value: Value;
+  selected: boolean;
+  onToggle: () => void;
+}) {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const handlePress = () => {
+    Animated.sequence([
+      Animated.timing(scale, { toValue: 0.93, duration: 90, useNativeDriver: USE_NATIVE_DRIVER }),
+      Animated.spring(scale, { toValue: 1, friction: 4, useNativeDriver: USE_NATIVE_DRIVER }),
+    ]).start();
+    onToggle();
+  };
+
+  return (
+    <Animated.View style={[styles.valueChipWrapper, { transform: [{ scale }] }]}>
+      <Pressable
+        onPress={handlePress}
+        style={[styles.valueOption, styles.valueOptionFull, selected && styles.valueOptionSelected]}
+      >
+        <View
+          style={[styles.valueDot, { backgroundColor: VALUE_STYLES[value].backgroundColor }]}
+        />
+        <Text style={[styles.valueOptionText, selected && styles.valueOptionTextSelected]}>
+          {value}
+        </Text>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
 function TaskEditorModal({
   visible,
   task,
@@ -440,82 +485,84 @@ function TaskEditorModal({
     onClose();
   };
 
+  const targetQuadrant = determineQuadrant(important, urgent);
+
   return (
-    <Modal visible={visible} animationType="slide" transparent>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
         <View style={styles.modalCard}>
-          <Text style={styles.modalTitle}>{task ? "Edit Task" : "New Task"}</Text>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.modalScrollContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            <Text style={styles.modalTitle}>{task ? "Edit task" : "New task"}</Text>
 
-          <TextInput
-            placeholder="Task name"
-            placeholderTextColor="#A1A1A1"
-            value={taskName}
-            onChangeText={setTaskName}
-            style={styles.input}
-          />
+            <TextInput
+              placeholder="Task name"
+              placeholderTextColor="#A1A1A1"
+              value={taskName}
+              onChangeText={setTaskName}
+              style={styles.input}
+            />
 
-          <Text style={styles.sectionLabel}>Important?</Text>
-          <View style={styles.rowChoices}>
-            <Pressable onPress={() => setImportant(true)}>
-              <Text>{important ? "✅ Yes" : "⬜ Yes"}</Text>
-            </Pressable>
-            <Pressable onPress={() => setImportant(false)}>
-              <Text>{!important ? "✅ No" : "⬜ No"}</Text>
-            </Pressable>
-          </View>
+            <View style={styles.toggleRow}>
+              <View style={styles.toggleTextGroup}>
+                <Text style={styles.toggleLabel}>Important</Text>
+                <Text style={styles.toggleHint}>Matters to your values</Text>
+              </View>
+              <Switch
+                value={important}
+                onValueChange={setImportant}
+                trackColor={{ false: "#E2E0D9", true: "#AEC1A1" }}
+                thumbColor={Platform.OS === "android" ? (important ? "#556B4D" : "#FFFFFF") : "#FFFFFF"}
+                ios_backgroundColor="#E2E0D9"
+              />
+            </View>
 
-          <Text style={styles.sectionLabel}>Urgent?</Text>
-          <View style={styles.rowChoices}>
-            <Pressable onPress={() => setUrgent(true)}>
-              <Text>{urgent ? "✅ Yes" : "⬜ Yes"}</Text>
-            </Pressable>
-            <Pressable onPress={() => setUrgent(false)}>
-              <Text>{!urgent ? "✅ No" : "⬜ No"}</Text>
-            </Pressable>
-          </View>
+            <View style={styles.toggleRow}>
+              <View style={styles.toggleTextGroup}>
+                <Text style={styles.toggleLabel}>Urgent</Text>
+                <Text style={styles.toggleHint}>Needs attention soon</Text>
+              </View>
+              <Switch
+                value={urgent}
+                onValueChange={setUrgent}
+                trackColor={{ false: "#E2E0D9", true: "#AEC1A1" }}
+                thumbColor={Platform.OS === "android" ? (urgent ? "#556B4D" : "#FFFFFF") : "#FFFFFF"}
+                ios_backgroundColor="#E2E0D9"
+              />
+            </View>
 
-          <Text style={styles.sectionLabel}>Values</Text>
-          <View style={styles.valueGrid}>
-            {VALUE_OPTIONS.map((value) => {
-              const isSelected = selectedValues.includes(value);
+            <View style={styles.quadrantPreview}>
+              <Text style={styles.quadrantPreviewLabel}>Lands in</Text>
+              <Text style={styles.quadrantPreviewValue}>{QUADRANTS[targetQuadrant].title}</Text>
+            </View>
 
-              return (
-                <Pressable
+            <Text style={styles.sectionLabel}>Values</Text>
+            <View style={styles.valueGrid}>
+              {VALUE_OPTIONS.map((value) => (
+                <ValueChip
                   key={value}
-                  onPress={() => toggleValue(value)}
-                  style={[styles.valueOption, isSelected && styles.valueOptionSelected]}
-                >
-                  <View
-                    style={[
-                      styles.valueDot,
-                      { backgroundColor: VALUE_STYLES[value].backgroundColor },
-                    ]}
-                  />
-                  <Text
-                    style={[
-                      styles.valueOptionText,
-                      isSelected && styles.valueOptionTextSelected,
-                    ]}
-                  >
-                    {value}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+                  value={value}
+                  selected={selectedValues.includes(value)}
+                  onToggle={() => toggleValue(value)}
+                />
+              ))}
+            </View>
 
-          <Text style={styles.sectionLabel}>Due date</Text>
-          <TextInput
-            placeholder="YYYY-MM-DD"
-            placeholderTextColor="#A1A1A1"
-            value={dueDate}
-            onChangeText={setDueDate}
-            style={styles.input}
-          />
+            <Text style={styles.sectionLabel}>Due date</Text>
+            <DateField value={dueDate} onChange={setDueDate} placeholder="Pick a date" />
 
-          <Pressable style={styles.saveButton} onPress={submit}>
-            <Text style={styles.saveText}>{task ? "Update" : "Save"}</Text>
-          </Pressable>
+            <View style={styles.modalActions}>
+              <Pressable style={styles.cancelButton} onPress={onClose}>
+                <Text style={styles.cancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable style={styles.saveButton} onPress={submit}>
+                <Text style={styles.saveText}>{task ? "Update" : "Save"}</Text>
+              </Pressable>
+            </View>
+          </ScrollView>
         </View>
       </View>
     </Modal>
@@ -1028,14 +1075,18 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     width: "90%",
-    backgroundColor: "white",
+    backgroundColor: "#FFFFFF",
     borderRadius: 24,
-    padding: 24,
     maxHeight: "86%",
+    overflow: "hidden",
+  },
+  modalScrollContent: {
+    padding: 24,
   },
   modalTitle: {
     fontSize: 24,
     fontWeight: "600",
+    color: "#2F2F2F",
     marginBottom: 20,
   },
   input: {
@@ -1043,23 +1094,67 @@ const styles = StyleSheet.create({
     borderColor: "#E5E5E5",
     borderRadius: 12,
     padding: 14,
-    marginBottom: 20,
+    marginBottom: 18,
+    fontSize: 15,
+    color: "#2F2F2F",
+    backgroundColor: "#FAFAF8",
   },
   sectionLabel: {
-    marginBottom: 8,
+    marginBottom: 10,
     color: "#3F3F3F",
     fontWeight: "600",
   },
-  rowChoices: {
+  toggleRow: {
     flexDirection: "row",
-    gap: 10,
-    marginBottom: 18,
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0EEE8",
+  },
+  toggleTextGroup: {
+    flexShrink: 1,
+    paddingRight: 12,
+  },
+  toggleLabel: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#2F2F2F",
+  },
+  toggleHint: {
+    fontSize: 12,
+    color: "#8B8B8B",
+    marginTop: 2,
+  },
+  quadrantPreview: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 16,
+    marginBottom: 22,
+    backgroundColor: "#F3F5EE",
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  quadrantPreviewLabel: {
+    fontSize: 13,
+    color: "#6F6A60",
+    fontWeight: "600",
+  },
+  quadrantPreviewValue: {
+    fontSize: 15,
+    color: "#2F2F2F",
+    fontWeight: "600",
   },
   valueGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 10,
-    marginBottom: 20,
+    marginBottom: 22,
+  },
+  valueChipWrapper: {
+    width: "48%",
   },
   valueOption: {
     width: "48%",
@@ -1069,8 +1164,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E5E5E5",
     borderRadius: 16,
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: 12,
+  },
+  valueOptionFull: {
+    width: "100%",
   },
   valueOptionSelected: {
     borderColor: "#556B4D",
@@ -1090,9 +1188,27 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 5,
   },
+  modalActions: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 8,
+  },
+  cancelButton: {
+    flex: 1,
+    paddingVertical: 16,
+    borderRadius: 14,
+    alignItems: "center",
+    backgroundColor: "#F0EEE8",
+  },
+  cancelText: {
+    color: "#5F5F5F",
+    fontSize: 16,
+    fontWeight: "600",
+  },
   saveButton: {
+    flex: 1,
     backgroundColor: "#556B4D",
-    padding: 16,
+    paddingVertical: 16,
     borderRadius: 14,
     alignItems: "center",
   },
