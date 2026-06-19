@@ -664,13 +664,14 @@ function QuadrantSummaryCard({
   const { tasks, toggleTaskCompletion } = useQuadrantData();
   const meta = QUADRANTS[quadrant];
   const quadrantTasks = tasks.filter((task) => task.quadrant === quadrant);
+  const activeCount = getIncompleteTasks(quadrantTasks).length;
   const previewTasks = getPreviewTasks(quadrantTasks);
   const moreCount = getMoreCount(quadrantTasks);
 
   return (
     <View style={styles.box}>
       <Text style={styles.heading}>
-        {meta.title} ({quadrantTasks.length})
+        {meta.title} ({activeCount})
       </Text>
       <Text style={styles.label}>{meta.subtitle}</Text>
 
