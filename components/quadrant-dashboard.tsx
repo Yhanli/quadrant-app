@@ -32,6 +32,7 @@ export type Task = {
   values: Value[];
   dueDate: string;
   completed: boolean;
+  completedAt: string | null;
 };
 
 type TaskDraft = {
@@ -49,16 +50,16 @@ type QuadrantContextValue = {
   saveTask: (draft: TaskDraft, editingTaskId: string | null) => void;
 };
 
-const QUADRANT_ORDER: Quadrant[] = ["Q1", "Q2", "Q3", "Q4"];
+export const QUADRANT_ORDER: Quadrant[] = ["Q1", "Q2", "Q3", "Q4"];
 
-const QUADRANTS: Record<Quadrant, { title: string; subtitle: string }> = {
+export const QUADRANTS: Record<Quadrant, { title: string; subtitle: string }> = {
   Q1: { title: "🔥 Do Now", subtitle: "Important + Urgent" },
   Q2: { title: "🌱 Grow", subtitle: "Important + Not Urgent" },
   Q3: { title: "📨 Respond", subtitle: "Urgent + Not Important" },
   Q4: { title: "🍃 Let Go", subtitle: "Not Important + Not Urgent" },
 };
 
-const VALUE_OPTIONS: Value[] = [
+export const VALUE_OPTIONS: Value[] = [
   "Health",
   "Family",
   "Growth",
@@ -67,7 +68,7 @@ const VALUE_OPTIONS: Value[] = [
   "Community",
 ];
 
-const VALUE_STYLES: Record<Value, { backgroundColor: string; color: string }> = {
+export const VALUE_STYLES: Record<Value, { backgroundColor: string; color: string }> = {
   Health: { backgroundColor: "#DCE7D7", color: "#53685A" },
   Family: { backgroundColor: "#E5C9CC", color: "#7A4D53" },
   Growth: { backgroundColor: "#D6E0EA", color: "#4E6881" },
@@ -160,10 +161,12 @@ type TaskRow = {
   task_values: Value[] | null;
   due_date: string | null;
   completed: boolean;
+  completed_at: string | null;
   created_at: string;
 };
 
-const TASK_COLUMNS = "id, title, quadrant, task_values, due_date, completed, created_at";
+const TASK_COLUMNS =
+  "id, title, quadrant, task_values, due_date, completed, completed_at, created_at";
 
 function rowToTask(row: TaskRow): Task {
   return {
@@ -173,6 +176,7 @@ function rowToTask(row: TaskRow): Task {
     values: row.task_values ?? [],
     dueDate: row.due_date ?? "",
     completed: row.completed,
+    completedAt: row.completed_at,
   };
 }
 
@@ -293,23 +297,31 @@ function QuadrantProvider({ children }: { children: ReactNode }) {
     if (!target) return;
 
     const nextCompleted = !target.completed;
+    // Stamp when a task is completed (cleared when it's un-completed) so the
+    // insights view can attribute it to a time window.
+    const nextCompletedAt = nextCompleted ? new Date().toISOString() : null;
+
     // Optimistic update so the UI reacts instantly; revert if the write fails.
     setTasks((currentTasks) =>
       currentTasks.map((task) =>
-        task.id === taskId ? { ...task, completed: nextCompleted } : task,
+        task.id === taskId
+          ? { ...task, completed: nextCompleted, completedAt: nextCompletedAt }
+          : task,
       ),
     );
 
     const { error } = await supabase
       .from("tasks")
-      .update({ completed: nextCompleted })
+      .update({ completed: nextCompleted, completed_at: nextCompletedAt })
       .eq("id", taskId);
 
     if (error) {
       console.warn("Failed to update task completion", error);
       setTasks((currentTasks) =>
         currentTasks.map((task) =>
-          task.id === taskId ? { ...task, completed: target.completed } : task,
+          task.id === taskId
+            ? { ...task, completed: target.completed, completedAt: target.completedAt }
+            : task,
         ),
       );
     }
@@ -366,7 +378,7 @@ function QuadrantProvider({ children }: { children: ReactNode }) {
   );
 }
 
-function useQuadrantData() {
+export function useQuadrantData() {
   const context = useContext(QuadrantContext);
 
   if (!context) {
@@ -625,12 +637,24 @@ function QuadrantSummaryCard({ quadrant }: { quadrant: Quadrant }) {
   );
 }
 
+function isCompletedToday(task: Task): boolean {
+  if (!task.completedAt) return false;
+
+  const completedAt = new Date(task.completedAt);
+  const now = new Date();
+  return (
+    completedAt.getFullYear() === now.getFullYear() &&
+    completedAt.getMonth() === now.getMonth() &&
+    completedAt.getDate() === now.getDate()
+  );
+}
+
 export function HomeScreen() {
   const { tasks, toggleTaskCompletion, saveTask } = useQuadrantData();
   const { session, signOut } = useAuth();
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
-  const completedTasks = tasks.filter((task) => task.completed);
+  const completedToday = tasks.filter(isCompletedToday);
   const displayName = session?.user.email?.split("@")[0] ?? "there";
 
   return (
@@ -655,13 +679,21 @@ export function HomeScreen() {
           ))}
         </View>
 
-        <View style={styles.completedSection}>
-          <Text style={styles.completedHeading}>✓ Completed Today ({completedTasks.length})</Text>
+        <Pressable
+          style={({ pressed }) => [styles.reflectionCard, pressed ? styles.pressedSummaryCard : null]}
+          onPress={() => router.push("/insights")}
+        >
+          <Text style={styles.reflectionTitle}>🌱 Reflection</Text>
+          <Text style={styles.reflectionSubtitle}>See where your time and values went →</Text>
+        </Pressable>
 
-          {completedTasks.length === 0 ? (
+        <View style={styles.completedSection}>
+          <Text style={styles.completedHeading}>✓ Completed Today ({completedToday.length})</Text>
+
+          {completedToday.length === 0 ? (
             <Text style={styles.completedEmpty}>Completed tasks will appear here.</Text>
           ) : (
-            completedTasks.map((task) => (
+            completedToday.map((task) => (
               <TaskCard
                 key={task.id}
                 task={task}
@@ -931,6 +963,26 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#8B8B8B",
     marginTop: 8,
+  },
+  reflectionCard: {
+    marginTop: 16,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 16,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  reflectionTitle: {
+    fontSize: 17,
+    fontWeight: "600",
+    color: "#2F2F2F",
+  },
+  reflectionSubtitle: {
+    marginTop: 4,
+    fontSize: 13,
+    color: "#7B7B7B",
   },
   completedSection: {
     marginTop: 26,
