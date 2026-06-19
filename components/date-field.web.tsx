@@ -1,53 +1,46 @@
-import { type ChangeEvent, createElement, useRef } from "react";
+import { type ChangeEvent, createElement } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { formatDueDate, type DateFieldProps } from "@/lib/date";
 
-// Web: a styled button that opens the browser's native calendar via a hidden
-// <input type="date">. The button always shows dd/mm/yyyy regardless of locale.
+// Web: show dd/mm/yyyy in a styled field, with a real (but transparent) native
+// <input type="date"> laid over the top. Tapping the field taps the input
+// directly, which reliably opens the browser/OS calendar on desktop AND mobile
+// (programmatic showPicker() is unreliable on phones).
 export function DateField({ value, onChange, placeholder = "Select date" }: DateFieldProps) {
-  const inputRef = useRef<HTMLInputElement | null>(null);
-
-  const openPicker = () => {
-    const input = inputRef.current;
-    if (!input) return;
-    if (typeof input.showPicker === "function") {
-      input.showPicker();
-    } else {
-      input.focus();
-    }
-  };
-
   return (
     <View style={styles.wrapper}>
-      <Pressable style={styles.field} onPress={openPicker}>
+      <View style={styles.field}>
         <Text style={value ? styles.value : styles.placeholder}>
           {value ? formatDueDate(value) : placeholder}
         </Text>
         <Text style={styles.icon}>📅</Text>
-      </Pressable>
+
+        {createElement("input", {
+          type: "date",
+          value: value || "",
+          "aria-label": "Due date",
+          onChange: (event: ChangeEvent<HTMLInputElement>) => onChange(event.target.value),
+          style: {
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            margin: 0,
+            padding: 0,
+            border: 0,
+            background: "transparent",
+            opacity: 0,
+            cursor: "pointer",
+          },
+        })}
+      </View>
 
       {value ? (
         <Pressable onPress={() => onChange("")} hitSlop={8} style={styles.clearButton}>
           <Text style={styles.clearText}>Clear</Text>
         </Pressable>
       ) : null}
-
-      {createElement("input", {
-        ref: inputRef,
-        type: "date",
-        value: value || "",
-        onChange: (event: ChangeEvent<HTMLInputElement>) => onChange(event.target.value),
-        style: {
-          position: "absolute",
-          width: 1,
-          height: 1,
-          opacity: 0,
-          border: 0,
-          padding: 0,
-          pointerEvents: "none",
-        },
-      })}
     </View>
   );
 }
@@ -59,6 +52,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   field: {
+    position: "relative",
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
