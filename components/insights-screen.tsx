@@ -1,4 +1,3 @@
-import { router } from "expo-router";
 import { useMemo, useState } from "react";
 import { type DimensionValue, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
@@ -93,10 +92,6 @@ export function InsightsScreen() {
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
-          <Text style={styles.backText}>← Back</Text>
-        </Pressable>
-
         <Text style={styles.title}>Reflection</Text>
         <Text style={styles.subtitle}>Am I spending my time on what matters most?</Text>
 
@@ -195,21 +190,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#F7F6F3",
   },
   content: {
-    paddingTop: 64,
+    paddingTop: 70,
     paddingHorizontal: 20,
-    paddingBottom: 60,
-  },
-  backButton: {
-    alignSelf: "flex-start",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    backgroundColor: "#FFFFFF",
-    marginBottom: 18,
-  },
-  backText: {
-    color: "#556B4D",
-    fontWeight: "600",
+    paddingBottom: 40,
   },
   title: {
     fontSize: 32,

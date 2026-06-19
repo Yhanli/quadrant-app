@@ -1,0 +1,32 @@
+name: Deploy web
+
+# Auto-deploy the web app to EAS Hosting (production) on every push to main.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {} # also allow manual runs from the GitHub Actions tab
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      # Supabase publishable config — safe to ship in the client (RLS protects
+      # data). Kept here because .env is gitignored and CI needs it at build.
+      EXPO_PUBLIC_SUPABASE_URL: https://vffyngripqvqopspcygy.supabase.co
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_6C-DiHe9qnMl81yC5Ll70A_kozAZnOH
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build web bundle
+        run: npx expo export --platform web
+
+      - name: Deploy to EAS Hosting (production)
+        run: npx eas-cli deploy --prod --non-interactive

@@ -1,5 +1,5 @@
 import { InsightsScreen } from "@/components/insights-screen";
 
-export default function InsightsRoute() {
+export default function InsightsTab() {
   return <InsightsScreen />;
 }

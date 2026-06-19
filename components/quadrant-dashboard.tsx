@@ -679,14 +679,6 @@ export function HomeScreen() {
           ))}
         </View>
 
-        <Pressable
-          style={({ pressed }) => [styles.reflectionCard, pressed ? styles.pressedSummaryCard : null]}
-          onPress={() => router.push("/insights")}
-        >
-          <Text style={styles.reflectionTitle}>🌱 Reflection</Text>
-          <Text style={styles.reflectionSubtitle}>See where your time and values went →</Text>
-        </Pressable>
-
         <View style={styles.completedSection}>
           <Text style={styles.completedHeading}>✓ Completed Today ({completedToday.length})</Text>
 
@@ -963,26 +955,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#8B8B8B",
     marginTop: 8,
-  },
-  reflectionCard: {
-    marginTop: 16,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 16,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 2,
-  },
-  reflectionTitle: {
-    fontSize: 17,
-    fontWeight: "600",
-    color: "#2F2F2F",
-  },
-  reflectionSubtitle: {
-    marginTop: 4,
-    fontSize: 13,
-    color: "#7B7B7B",
   },
   completedSection: {
     marginTop: 26,
