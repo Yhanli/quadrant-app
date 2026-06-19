@@ -7,9 +7,9 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View,
 } from "react-native";
 
+import { FadeInView, PressableScale } from "@/components/animated";
 import { useAuth } from "@/components/auth-provider";
 
 type Mode = "signIn" | "signUp";
@@ -60,8 +60,9 @@ export function AuthScreen() {
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <View style={styles.card}>
+      <FadeInView style={styles.card}>
         <Text style={styles.brand}>Quadrant</Text>
+        <Text style={styles.tagline}>Spend more time on what matters.</Text>
         <Text style={styles.subtitle}>
           {isSignUp ? "Create your account" : "Welcome back"}
         </Text>
@@ -89,7 +90,7 @@ export function AuthScreen() {
 
         {message ? <Text style={styles.message}>{message}</Text> : null}
 
-        <Pressable
+        <PressableScale
           style={[styles.button, isSubmitting && styles.buttonDisabled]}
           onPress={submit}
           disabled={isSubmitting}
@@ -99,14 +100,14 @@ export function AuthScreen() {
           ) : (
             <Text style={styles.buttonText}>{isSignUp ? "Create account" : "Sign in"}</Text>
           )}
-        </Pressable>
+        </PressableScale>
 
         <Pressable onPress={switchMode} style={styles.switchButton}>
           <Text style={styles.switchText}>
             {isSignUp ? "Already have an account? Sign in" : "New here? Create an account"}
           </Text>
         </Pressable>
-      </View>
+      </FadeInView>
     </KeyboardAvoidingView>
   );
 }
@@ -132,10 +133,16 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#2F2F2F",
   },
+  tagline: {
+    fontSize: 14,
+    color: "#556B4D",
+    marginTop: 6,
+    fontWeight: "500",
+  },
   subtitle: {
     fontSize: 15,
     color: "#8B8B8B",
-    marginTop: 6,
+    marginTop: 16,
     marginBottom: 24,
   },
   input: {

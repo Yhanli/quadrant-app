@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
-import { type DimensionValue, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
+import { AnimatedBar, FadeInView } from "@/components/animated";
 import {
   QUADRANT_ORDER,
   QUADRANTS,
@@ -36,10 +37,6 @@ function completedInRange(tasks: Task[], range: Range): Task[] {
 
 function percent(part: number, whole: number): number {
   return whole > 0 ? Math.round((part / whole) * 100) : 0;
-}
-
-function barWidth(p: number): DimensionValue {
-  return `${p}%`;
 }
 
 function coachingLine(topQuadrant: Quadrant, topPercent: number): string {
@@ -92,8 +89,10 @@ export function InsightsScreen() {
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={styles.title}>Reflection</Text>
-        <Text style={styles.subtitle}>Am I spending my time on what matters most?</Text>
+        <FadeInView>
+          <Text style={styles.title}>Reflection</Text>
+          <Text style={styles.subtitle}>Am I spending my time on what matters most?</Text>
+        </FadeInView>
 
         <View style={styles.toggle}>
           {(["week", "all"] as Range[]).map((option) => {
@@ -113,70 +112,69 @@ export function InsightsScreen() {
         </View>
 
         {total === 0 ? (
-          <View style={styles.headlineCard}>
+          <FadeInView style={styles.headlineCard}>
             <Text style={styles.headlineText}>
               Complete a few tasks and your reflection will appear here.
             </Text>
-          </View>
+          </FadeInView>
         ) : (
           <>
-            <View style={styles.headlineCard}>
+            <FadeInView style={styles.headlineCard}>
               <Text style={styles.headlineText}>
                 {coachingLine(topQuadrant, percent(quadrantCounts[topQuadrant], total))}
               </Text>
               <Text style={styles.headlineMeta}>
                 {total} task{total === 1 ? "" : "s"} completed
               </Text>
-            </View>
+            </FadeInView>
 
-            <Text style={styles.sectionTitle}>Where your energy went</Text>
-            <View style={styles.card}>
-              {QUADRANT_ORDER.map((quadrant) => {
-                const p = percent(quadrantCounts[quadrant], total);
-                return (
-                  <View key={quadrant} style={styles.barRow}>
-                    <Text style={styles.barLabel}>{QUADRANTS[quadrant].title}</Text>
-                    <View style={styles.barTrack}>
-                      <View
-                        style={[
-                          styles.barFill,
-                          { width: barWidth(p), backgroundColor: QUADRANT_BAR_COLOR[quadrant] },
-                        ]}
-                      />
-                    </View>
-                    <Text style={styles.barPct}>{p}%</Text>
-                  </View>
-                );
-              })}
-            </View>
-
-            <Text style={styles.sectionTitle}>Values you supported</Text>
-            <View style={styles.card}>
-              {valueRows.length === 0 ? (
-                <Text style={styles.emptyText}>No values tagged on these tasks yet.</Text>
-              ) : (
-                valueRows.map((row) => {
-                  const p = percent(row.count, valueMentions);
+            <FadeInView delay={80}>
+              <Text style={styles.sectionTitle}>Where your energy went</Text>
+              <View style={styles.card}>
+                {QUADRANT_ORDER.map((quadrant) => {
+                  const p = percent(quadrantCounts[quadrant], total);
                   return (
-                    <View key={row.value} style={styles.barRow}>
-                      <Text style={styles.barLabel}>{row.value}</Text>
+                    <View key={quadrant} style={styles.barRow}>
+                      <Text style={styles.barLabel}>{QUADRANTS[quadrant].title}</Text>
                       <View style={styles.barTrack}>
-                        <View
-                          style={[
-                            styles.barFill,
-                            {
-                              width: barWidth(p),
-                              backgroundColor: VALUE_STYLES[row.value].backgroundColor,
-                            },
-                          ]}
+                        <AnimatedBar
+                          percent={p}
+                          color={QUADRANT_BAR_COLOR[quadrant]}
+                          style={styles.barFill}
                         />
                       </View>
                       <Text style={styles.barPct}>{p}%</Text>
                     </View>
                   );
-                })
-              )}
-            </View>
+                })}
+              </View>
+            </FadeInView>
+
+            <FadeInView delay={160}>
+              <Text style={styles.sectionTitle}>Values you supported</Text>
+              <View style={styles.card}>
+                {valueRows.length === 0 ? (
+                  <Text style={styles.emptyText}>No values tagged on these tasks yet.</Text>
+                ) : (
+                  valueRows.map((row) => {
+                    const p = percent(row.count, valueMentions);
+                    return (
+                      <View key={row.value} style={styles.barRow}>
+                        <Text style={styles.barLabel}>{row.value}</Text>
+                        <View style={styles.barTrack}>
+                          <AnimatedBar
+                            percent={p}
+                            color={VALUE_STYLES[row.value].backgroundColor}
+                            style={styles.barFill}
+                          />
+                        </View>
+                        <Text style={styles.barPct}>{p}%</Text>
+                      </View>
+                    );
+                  })
+                )}
+              </View>
+            </FadeInView>
           </>
         )}
       </ScrollView>

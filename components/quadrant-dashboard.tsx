@@ -15,6 +15,7 @@ import {
     View,
 } from "react-native";
 
+import { FadeInView, PressableScale } from "@/components/animated";
 import { useAuth } from "@/components/auth-provider";
 import { DateField } from "@/components/date-field";
 import { formatDueDate } from "@/lib/date";
@@ -153,13 +154,9 @@ function TaskCard({
   onLongPress?: () => void;
 }) {
   return (
-    <Pressable
-      style={({ pressed }) => [styles.taskCard, pressed && onPress ? styles.pressedCard : null]}
-      onPress={onPress}
-      onLongPress={onLongPress}
-    >
+    <PressableScale style={styles.taskCard} onPress={onPress} onLongPress={onLongPress}>
       <TaskCardContent task={task} />
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -555,12 +552,12 @@ function TaskEditorModal({
             <DateField value={dueDate} onChange={setDueDate} placeholder="Pick a date" />
 
             <View style={styles.modalActions}>
-              <Pressable style={styles.cancelButton} onPress={onClose}>
+              <PressableScale style={styles.cancelButton} onPress={onClose}>
                 <Text style={styles.cancelText}>Cancel</Text>
-              </Pressable>
-              <Pressable style={styles.saveButton} onPress={submit}>
+              </PressableScale>
+              <PressableScale style={styles.saveButton} onPress={submit}>
                 <Text style={styles.saveText}>{task ? "Update" : "Save"}</Text>
-              </Pressable>
+              </PressableScale>
             </View>
           </ScrollView>
         </View>
@@ -647,18 +644,20 @@ function QuadrantTaskComposer({
         style={styles.composerInput}
       />
 
-      <Pressable style={styles.composerButton} onPress={submitTask}>
+      <PressableScale style={styles.composerButton} onPress={submitTask}>
         <Text style={styles.composerButtonText}>Add task</Text>
-      </Pressable>
+      </PressableScale>
     </View>
   );
 }
 
 function QuadrantSummaryCard({
   quadrant,
+  index,
   onEditTask,
 }: {
   quadrant: Quadrant;
+  index: number;
   onEditTask: (task: Task) => void;
 }) {
   const { tasks, toggleTaskCompletion } = useQuadrantData();
@@ -669,7 +668,7 @@ function QuadrantSummaryCard({
   const moreCount = getMoreCount(quadrantTasks);
 
   return (
-    <View style={styles.box}>
+    <FadeInView style={styles.box} delay={index * 70}>
       <Text style={styles.heading}>
         {meta.title} ({activeCount})
       </Text>
@@ -678,14 +677,14 @@ function QuadrantSummaryCard({
       <View style={styles.previewStack}>
         {previewTasks.map((task) => (
           // Tap to complete, long-press to edit — no screen change.
-          <Pressable
+          <PressableScale
             key={task.id}
-            style={({ pressed }) => [styles.previewTaskCard, pressed ? styles.pressedCard : null]}
+            style={styles.previewTaskCard}
             onPress={() => toggleTaskCompletion(task.id)}
             onLongPress={() => onEditTask(task)}
           >
             <TaskCardContent task={task} />
-          </Pressable>
+          </PressableScale>
         ))}
 
         {/* The detail screen is only needed to reach tasks hidden by the preview. */}
@@ -695,7 +694,7 @@ function QuadrantSummaryCard({
           </Pressable>
         ) : null}
       </View>
-    </View>
+    </FadeInView>
   );
 }
 
@@ -732,22 +731,29 @@ export function HomeScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.headerRow}>
-          <Text style={styles.greeting}>Hello, {displayName}</Text>
-          <Pressable onPress={signOut} hitSlop={8}>
-            <Text style={styles.signOutText}>Sign out</Text>
-          </Pressable>
-        </View>
-        <Text style={styles.title}>Quadrant</Text>
-        <Text style={styles.focusLabel}>Living your values today</Text>
+        <FadeInView>
+          <View style={styles.headerRow}>
+            <Text style={styles.greeting}>Hello, {displayName}</Text>
+            <Pressable onPress={signOut} hitSlop={8}>
+              <Text style={styles.signOutText}>Sign out</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.title}>Quadrant</Text>
+          <Text style={styles.focusLabel}>Living your values today</Text>
+        </FadeInView>
 
         <View style={styles.matrix}>
-          {QUADRANT_ORDER.map((quadrant) => (
-            <QuadrantSummaryCard key={quadrant} quadrant={quadrant} onEditTask={setEditingTask} />
+          {QUADRANT_ORDER.map((quadrant, index) => (
+            <QuadrantSummaryCard
+              key={quadrant}
+              quadrant={quadrant}
+              index={index}
+              onEditTask={setEditingTask}
+            />
           ))}
         </View>
 
-        <View style={styles.completedSection}>
+        <FadeInView delay={220} style={styles.completedSection}>
           <Text style={styles.completedHeading}>✓ Completed Today ({completedToday.length})</Text>
 
           {completedToday.length === 0 ? (
@@ -762,16 +768,16 @@ export function HomeScreen() {
               />
             ))
           )}
-        </View>
+        </FadeInView>
       </ScrollView>
 
-      <Pressable
-        style={({ pressed }) => [styles.fab, pressed ? styles.fabPressed : null]}
+      <PressableScale
+        style={styles.fab}
         onPress={() => setComposing(true)}
         accessibilityLabel="Add a task"
       >
         <Text style={styles.fabIcon}>＋</Text>
-      </Pressable>
+      </PressableScale>
 
       <TaskEditorModal
         visible={editingTask !== null || composing}
@@ -915,9 +921,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     elevation: 5,
   },
-  fabPressed: {
-    opacity: 0.9,
-  },
   fabIcon: {
     color: "#FFFFFF",
     fontSize: 30,
@@ -999,9 +1002,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     backgroundColor: "#FAFAF8",
-  },
-  pressedCard: {
-    opacity: 0.9,
   },
   taskTitle: {
     fontSize: 14,
