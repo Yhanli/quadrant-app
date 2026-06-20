@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -7,6 +8,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  View,
 } from "react-native";
 
 import { FadeInView, PressableScale } from "@/components/animated";
@@ -15,7 +17,7 @@ import { useAuth } from "@/components/auth-provider";
 type Mode = "signIn" | "signUp";
 
 export function AuthScreen() {
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, signInWithGoogle } = useAuth();
   const [mode, setMode] = useState<Mode>("signIn");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -23,6 +25,15 @@ export function AuthScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const isSignUp = mode === "signUp";
+
+  const continueWithGoogle = async () => {
+    setMessage(null);
+    const result = await signInWithGoogle();
+    if (result.error) {
+      setMessage(result.error);
+    }
+    // On success the page redirects to Google, so nothing else to do here.
+  };
 
   const submit = async () => {
     setMessage(null);
@@ -102,6 +113,17 @@ export function AuthScreen() {
           )}
         </PressableScale>
 
+        <View style={styles.divider}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>or</Text>
+          <View style={styles.dividerLine} />
+        </View>
+
+        <PressableScale style={styles.googleButton} onPress={continueWithGoogle}>
+          <Ionicons name="logo-google" size={18} color="#3F3F3F" />
+          <Text style={styles.googleText}>Continue with Google</Text>
+        </PressableScale>
+
         <Pressable onPress={switchMode} style={styles.switchButton}>
           <Text style={styles.switchText}>
             {isSignUp ? "Already have an account? Sign in" : "New here? Create an account"}
@@ -171,6 +193,37 @@ const styles = StyleSheet.create({
   buttonText: {
     color: "#FFFFFF",
     fontSize: 16,
+    fontWeight: "600",
+  },
+  divider: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginVertical: 18,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#ECE9E2",
+  },
+  dividerText: {
+    color: "#A1A1A1",
+    fontSize: 13,
+  },
+  googleButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#E0DED7",
+    backgroundColor: "#FFFFFF",
+  },
+  googleText: {
+    color: "#3F3F3F",
+    fontSize: 15,
     fontWeight: "600",
   },
   switchButton: {

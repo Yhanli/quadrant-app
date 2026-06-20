@@ -21,8 +21,9 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     storage: AsyncStorage,
     autoRefreshToken: true,
     persistSession: true,
-    // We use email/password, not URL-based magic links, so no URL session parsing.
-    detectSessionInUrl: false,
+    // On web, parse the OAuth redirect (?code=…) so Google sign-in completes.
+    // On native there's no URL to parse.
+    detectSessionInUrl: Platform.OS === "web",
   },
 });
 
