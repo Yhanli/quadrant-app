@@ -25,13 +25,18 @@ const USE_NATIVE_DRIVER = Platform.OS !== "web";
 
 export type Quadrant = "Q1" | "Q2" | "Q3" | "Q4";
 
-export type Value =
-  | "Health"
-  | "Family"
-  | "Growth"
-  | "Financial Security"
-  | "Adventure"
-  | "Community";
+// A value is just its name now; the full definition (name + colour) lives in
+// the user-editable `personal_values` table and is loaded into context.
+export type Value = string;
+
+export type ValueDef = {
+  id: string;
+  name: string;
+  color: string; // chip background
+  textColor: string; // chip text
+};
+
+export type ValueColor = { backgroundColor: string; color: string };
 
 export type Task = {
   id: string;
@@ -53,9 +58,14 @@ type TaskDraft = {
 
 type QuadrantContextValue = {
   tasks: Task[];
+  values: ValueDef[];
+  valueColor: (name: string) => ValueColor;
   toggleTaskCompletion: (taskId: string) => void;
   addTaskToQuadrant: (quadrant: Quadrant, draft: Omit<TaskDraft, "important" | "urgent">) => void;
   saveTask: (draft: TaskDraft, editingTaskId: string | null) => void;
+  addValue: (name: string, color: string, textColor: string) => Promise<void>;
+  updateValue: (id: string, changes: { name?: string; color?: string; textColor?: string }) => Promise<void>;
+  deleteValue: (id: string) => Promise<void>;
 };
 
 export const QUADRANT_ORDER: Quadrant[] = ["Q1", "Q2", "Q3", "Q4"];
@@ -67,23 +77,30 @@ export const QUADRANTS: Record<Quadrant, { title: string; subtitle: string }> = 
   Q4: { title: "🍃 Let Go", subtitle: "Not Important + Not Urgent" },
 };
 
-export const VALUE_OPTIONS: Value[] = [
-  "Health",
-  "Family",
-  "Growth",
-  "Financial Security",
-  "Adventure",
-  "Community",
+// Seeded for every new user; existing tasks reference these by name.
+const DEFAULT_VALUES: { name: string; color: string; textColor: string }[] = [
+  { name: "Health", color: "#DCE7D7", textColor: "#53685A" },
+  { name: "Family", color: "#E5C9CC", textColor: "#7A4D53" },
+  { name: "Growth", color: "#D6E0EA", textColor: "#4E6881" },
+  { name: "Financial Security", color: "#E7DDC3", textColor: "#8A7346" },
+  { name: "Adventure", color: "#EAD9AF", textColor: "#8B6A22" },
+  { name: "Community", color: "#D8E3D3", textColor: "#5F735F" },
 ];
 
-export const VALUE_STYLES: Record<Value, { backgroundColor: string; color: string }> = {
-  Health: { backgroundColor: "#DCE7D7", color: "#53685A" },
-  Family: { backgroundColor: "#E5C9CC", color: "#7A4D53" },
-  Growth: { backgroundColor: "#D6E0EA", color: "#4E6881" },
-  "Financial Security": { backgroundColor: "#E7DDC3", color: "#8A7346" },
-  Adventure: { backgroundColor: "#EAD9AF", color: "#8B6A22" },
-  Community: { backgroundColor: "#D8E3D3", color: "#5F735F" },
-};
+// Earthy, muted palette offered when creating/recolouring a value.
+export const VALUE_PALETTE: { color: string; textColor: string }[] = [
+  { color: "#DCE7D7", textColor: "#53685A" },
+  { color: "#E5C9CC", textColor: "#7A4D53" },
+  { color: "#D6E0EA", textColor: "#4E6881" },
+  { color: "#E7DDC3", textColor: "#8A7346" },
+  { color: "#EAD9AF", textColor: "#8B6A22" },
+  { color: "#D8E3D3", textColor: "#5F735F" },
+  { color: "#E3D7E5", textColor: "#6B5A72" },
+  { color: "#E8D3CA", textColor: "#8A5E4A" },
+  { color: "#D4E0DE", textColor: "#4F6E68" },
+];
+
+const FALLBACK_VALUE_COLOR: ValueColor = { backgroundColor: "#ECEAE3", color: "#6F6A60" };
 
 const TASK_STORAGE_KEY = "quadrant_tasks";
 
@@ -115,6 +132,8 @@ function getMoreCount(tasks: Task[]) {
 }
 
 function TaskCardContent({ task }: { task: Task }) {
+  const { valueColor } = useQuadrantData();
+
   return (
     <>
       <Text style={[styles.taskTitle, task.completed && styles.taskTitleCompleted]}>
@@ -126,19 +145,14 @@ function TaskCardContent({ task }: { task: Task }) {
       ) : null}
 
       <View style={styles.taskTags}>
-        {task.values.map((value) => (
-          <View
-            key={value}
-            style={[
-              styles.taskChip,
-              { backgroundColor: VALUE_STYLES[value].backgroundColor },
-            ]}
-          >
-            <Text style={[styles.taskChipText, { color: VALUE_STYLES[value].color }]}>
-              {value}
-            </Text>
-          </View>
-        ))}
+        {task.values.map((value) => {
+          const palette = valueColor(value);
+          return (
+            <View key={value} style={[styles.taskChip, { backgroundColor: palette.backgroundColor }]}>
+              <Text style={[styles.taskChipText, { color: palette.color }]}>{value}</Text>
+            </View>
+          );
+        })}
       </View>
     </>
   );
@@ -194,11 +208,211 @@ function fetchTasks() {
   return supabase.from("tasks").select(TASK_COLUMNS).order("created_at", { ascending: true });
 }
 
+type ValueRow = {
+  id: string;
+  name: string;
+  color: string;
+  text_color: string;
+  sort_order: number;
+};
+
+const VALUE_COLUMNS = "id, name, color, text_color, sort_order";
+
+function rowToValueDef(row: ValueRow): ValueDef {
+  return { id: row.id, name: row.name, color: row.color, textColor: row.text_color };
+}
+
+function fetchValues() {
+  return supabase.from("personal_values").select(VALUE_COLUMNS).order("sort_order", { ascending: true });
+}
+
 function QuadrantProvider({ children }: { children: ReactNode }) {
   const { session } = useAuth();
   const userId = session?.user.id ?? null;
   const [tasks, setTasks] = useState<Task[]>(INITIAL_TASKS);
+  const [values, setValues] = useState<ValueDef[]>([]);
   const [hasHydrated, setHasHydrated] = useState(false);
+
+  // Load the user's values; seed the defaults the first time (so existing
+  // tasks, which reference values by name, keep their colours).
+  useEffect(() => {
+    if (!userId) {
+      setValues([]);
+      return;
+    }
+
+    let isActive = true;
+
+    const loadValues = async () => {
+      const { data, error } = await fetchValues();
+      if (!isActive) return;
+
+      if (error) {
+        console.warn("Failed to fetch values", error);
+        return;
+      }
+
+      if ((data as ValueRow[]).length > 0) {
+        setValues((data as ValueRow[]).map(rowToValueDef));
+        return;
+      }
+
+      const seed = DEFAULT_VALUES.map((value, index) => ({
+        user_id: userId,
+        name: value.name,
+        color: value.color,
+        text_color: value.textColor,
+        sort_order: index,
+      }));
+      const { data: inserted, error: seedError } = await supabase
+        .from("personal_values")
+        .insert(seed)
+        .select(VALUE_COLUMNS)
+        .order("sort_order", { ascending: true });
+
+      if (!isActive) return;
+      if (seedError) {
+        console.warn("Failed to seed default values", seedError);
+        return;
+      }
+      setValues((inserted as ValueRow[]).map(rowToValueDef));
+    };
+
+    void loadValues();
+
+    return () => {
+      isActive = false;
+    };
+  }, [userId]);
+
+  const valueColor = (name: string): ValueColor => {
+    const found = values.find((value) => value.name === name);
+    return found ? { backgroundColor: found.color, color: found.textColor } : FALLBACK_VALUE_COLOR;
+  };
+
+  // Replace a value's name across every task that references it (values are
+  // linked by name), keeping local state and Supabase in sync.
+  const replaceValueNameInTasks = async (oldName: string, newName: string) => {
+    const affected = tasks.filter((task) => task.values.includes(oldName));
+    if (affected.length === 0) return;
+
+    setTasks((currentTasks) =>
+      currentTasks.map((task) =>
+        task.values.includes(oldName)
+          ? { ...task, values: task.values.map((value) => (value === oldName ? newName : value)) }
+          : task,
+      ),
+    );
+
+    await Promise.all(
+      affected.map((task) =>
+        supabase
+          .from("tasks")
+          .update({ task_values: task.values.map((value) => (value === oldName ? newName : value)) })
+          .eq("id", task.id),
+      ),
+    );
+  };
+
+  const removeValueFromTasks = async (name: string) => {
+    const affected = tasks.filter((task) => task.values.includes(name));
+    if (affected.length === 0) return;
+
+    setTasks((currentTasks) =>
+      currentTasks.map((task) =>
+        task.values.includes(name)
+          ? { ...task, values: task.values.filter((value) => value !== name) }
+          : task,
+      ),
+    );
+
+    await Promise.all(
+      affected.map((task) =>
+        supabase
+          .from("tasks")
+          .update({ task_values: task.values.filter((value) => value !== name) })
+          .eq("id", task.id),
+      ),
+    );
+  };
+
+  const addValue = async (name: string, color: string, textColor: string) => {
+    const trimmed = name.trim();
+    if (!trimmed || !userId) return;
+
+    const { data, error } = await supabase
+      .from("personal_values")
+      .insert({
+        user_id: userId,
+        name: trimmed,
+        color,
+        text_color: textColor,
+        sort_order: values.length,
+      })
+      .select(VALUE_COLUMNS)
+      .single();
+
+    if (error || !data) {
+      console.warn("Failed to add value", error);
+      return;
+    }
+
+    setValues((currentValues) => [...currentValues, rowToValueDef(data as ValueRow)]);
+  };
+
+  const updateValue = async (
+    id: string,
+    changes: { name?: string; color?: string; textColor?: string },
+  ) => {
+    const target = values.find((value) => value.id === id);
+    if (!target) return;
+
+    const nextName = changes.name !== undefined ? changes.name.trim() : target.name;
+    if (!nextName) return;
+
+    const dbChanges: { name?: string; color?: string; text_color?: string } = {};
+    if (changes.name !== undefined) dbChanges.name = nextName;
+    if (changes.color !== undefined) dbChanges.color = changes.color;
+    if (changes.textColor !== undefined) dbChanges.text_color = changes.textColor;
+
+    setValues((currentValues) =>
+      currentValues.map((value) =>
+        value.id === id
+          ? {
+              ...value,
+              name: nextName,
+              color: changes.color ?? value.color,
+              textColor: changes.textColor ?? value.textColor,
+            }
+          : value,
+      ),
+    );
+
+    const { error } = await supabase.from("personal_values").update(dbChanges).eq("id", id);
+    if (error) {
+      console.warn("Failed to update value", error);
+      return;
+    }
+
+    if (nextName !== target.name) {
+      await replaceValueNameInTasks(target.name, nextName);
+    }
+  };
+
+  const deleteValue = async (id: string) => {
+    const target = values.find((value) => value.id === id);
+    if (!target) return;
+
+    setValues((currentValues) => currentValues.filter((value) => value.id !== id));
+
+    const { error } = await supabase.from("personal_values").delete().eq("id", id);
+    if (error) {
+      console.warn("Failed to delete value", error);
+      return;
+    }
+
+    await removeValueFromTasks(target.name);
+  };
 
   // Load tasks: show the cached copy instantly (works offline), then refresh
   // from Supabase so other devices' changes appear.
@@ -338,13 +552,13 @@ function QuadrantProvider({ children }: { children: ReactNode }) {
 
     const title = draft.title.trim();
     const quadrant = determineQuadrant(draft.important, draft.urgent);
-    const values = draft.values.length > 0 ? draft.values : (["Health"] as Value[]);
+    const taskValues = draft.values;
     const dueDate = draft.dueDate.trim();
 
     const dbFields = {
       title,
       quadrant,
-      task_values: values,
+      task_values: taskValues,
       due_date: dueDate || null,
     };
 
@@ -352,7 +566,9 @@ function QuadrantProvider({ children }: { children: ReactNode }) {
       // Optimistic edit; completion state is left untouched.
       setTasks((currentTasks) =>
         currentTasks.map((task) =>
-          task.id === editingTaskId ? { ...task, title, quadrant, values, dueDate } : task,
+          task.id === editingTaskId
+            ? { ...task, title, quadrant, values: taskValues, dueDate }
+            : task,
         ),
       );
 
@@ -378,7 +594,19 @@ function QuadrantProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <QuadrantContext.Provider value={{ tasks, toggleTaskCompletion, addTaskToQuadrant, saveTask }}>
+    <QuadrantContext.Provider
+      value={{
+        tasks,
+        values,
+        valueColor,
+        toggleTaskCompletion,
+        addTaskToQuadrant,
+        saveTask,
+        addValue,
+        updateValue,
+        deleteValue,
+      }}
+    >
       {children}
     </QuadrantContext.Provider>
   );
@@ -395,11 +623,11 @@ export function useQuadrantData() {
 }
 
 function ValueChip({
-  value,
+  valueDef,
   selected,
   onToggle,
 }: {
-  value: Value;
+  valueDef: ValueDef;
   selected: boolean;
   onToggle: () => void;
 }) {
@@ -419,11 +647,9 @@ function ValueChip({
         onPress={handlePress}
         style={[styles.valueOption, styles.valueOptionFull, selected && styles.valueOptionSelected]}
       >
-        <View
-          style={[styles.valueDot, { backgroundColor: VALUE_STYLES[value].backgroundColor }]}
-        />
+        <View style={[styles.valueDot, { backgroundColor: valueDef.color }]} />
         <Text style={[styles.valueOptionText, selected && styles.valueOptionTextSelected]}>
-          {value}
+          {valueDef.name}
         </Text>
       </Pressable>
     </Animated.View>
@@ -441,11 +667,12 @@ function TaskEditorModal({
   onClose: () => void;
   onSubmit: (draft: TaskDraft, editingTaskId: string | null) => void;
 }) {
+  const { values } = useQuadrantData();
   const [taskName, setTaskName] = useState("");
   const [important, setImportant] = useState(true);
   const [urgent, setUrgent] = useState(false);
   const [dueDate, setDueDate] = useState("");
-  const [selectedValues, setSelectedValues] = useState<Value[]>(["Health"]);
+  const [selectedValues, setSelectedValues] = useState<Value[]>([]);
 
   useEffect(() => {
     if (!visible) return;
@@ -463,7 +690,7 @@ function TaskEditorModal({
     setImportant(true);
     setUrgent(false);
     setDueDate("");
-    setSelectedValues(["Health"]);
+    setSelectedValues([]);
   }, [task, visible]);
 
   const toggleValue = (value: Value) => {
@@ -537,16 +764,20 @@ function TaskEditorModal({
             </View>
 
             <Text style={styles.sectionLabel}>Values</Text>
-            <View style={styles.valueGrid}>
-              {VALUE_OPTIONS.map((value) => (
-                <ValueChip
-                  key={value}
-                  value={value}
-                  selected={selectedValues.includes(value)}
-                  onToggle={() => toggleValue(value)}
-                />
-              ))}
-            </View>
+            {values.length === 0 ? (
+              <Text style={styles.valuesEmpty}>Add values from the Values screen.</Text>
+            ) : (
+              <View style={styles.valueGrid}>
+                {values.map((valueDef) => (
+                  <ValueChip
+                    key={valueDef.id}
+                    valueDef={valueDef}
+                    selected={selectedValues.includes(valueDef.name)}
+                    onToggle={() => toggleValue(valueDef.name)}
+                  />
+                ))}
+              </View>
+            )}
 
             <Text style={styles.sectionLabel}>Due date</Text>
             <DateField value={dueDate} onChange={setDueDate} placeholder="Pick a date" />
@@ -573,6 +804,7 @@ function QuadrantTaskComposer({
   quadrant: Quadrant;
   onAddTask: (title: string, values: Value[], dueDate: string) => void;
 }) {
+  const { values } = useQuadrantData();
   const [taskTitle, setTaskTitle] = useState("");
   const [taskValues, setTaskValues] = useState<Value[]>([]);
   const [taskDueDate, setTaskDueDate] = useState("");
@@ -606,43 +838,35 @@ function QuadrantTaskComposer({
       />
 
       <Text style={styles.composerSectionLabel}>Values, if relevant</Text>
-      <View style={styles.valueGrid}>
-        {VALUE_OPTIONS.map((value) => {
-          const isSelected = taskValues.includes(value);
+      {values.length === 0 ? (
+        <Text style={styles.valuesEmpty}>Add values from the Values screen.</Text>
+      ) : (
+        <View style={styles.valueGrid}>
+          {values.map((valueDef) => {
+            const isSelected = taskValues.includes(valueDef.name);
 
-          return (
-            <Pressable
-              key={value}
-              onPress={() => toggleComposerValue(value)}
-              style={[styles.valueOption, isSelected && styles.valueOptionSelected]}
-            >
-              <View
-                style={[
-                  styles.valueDot,
-                  { backgroundColor: VALUE_STYLES[value].backgroundColor },
-                ]}
-              />
-              <Text
-                style={[
-                  styles.valueOptionText,
-                  isSelected && styles.valueOptionTextSelected,
-                ]}
+            return (
+              <Pressable
+                key={valueDef.id}
+                onPress={() => toggleComposerValue(valueDef.name)}
+                style={[styles.valueOption, isSelected && styles.valueOptionSelected]}
               >
-                {value}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+                <View style={[styles.valueDot, { backgroundColor: valueDef.color }]} />
+                <Text
+                  style={[styles.valueOptionText, isSelected && styles.valueOptionTextSelected]}
+                >
+                  {valueDef.name}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
 
       <Text style={styles.composerSectionLabel}>Due date</Text>
-      <TextInput
-        placeholder="YYYY-MM-DD"
-        placeholderTextColor="#A1A1A1"
-        value={taskDueDate}
-        onChangeText={setTaskDueDate}
-        style={styles.composerInput}
-      />
+      <DateField value={taskDueDate} onChange={setTaskDueDate} placeholder="Pick a date" />
+
+      <View style={styles.composerSpacer} />
 
       <PressableScale style={styles.composerButton} onPress={submitTask}>
         <Text style={styles.composerButtonText}>Add task</Text>
@@ -734,9 +958,14 @@ export function HomeScreen() {
         <FadeInView>
           <View style={styles.headerRow}>
             <Text style={styles.greeting}>Hello, {displayName}</Text>
-            <Pressable onPress={signOut} hitSlop={8}>
-              <Text style={styles.signOutText}>Sign out</Text>
-            </Pressable>
+            <View style={styles.headerActions}>
+              <Pressable onPress={() => router.push("/values")} hitSlop={8}>
+                <Text style={styles.signOutText}>Values</Text>
+              </Pressable>
+              <Pressable onPress={signOut} hitSlop={8}>
+                <Text style={styles.signOutText}>Sign out</Text>
+              </Pressable>
+            </View>
           </View>
           <Text style={styles.title}>Quadrant</Text>
           <Text style={styles.focusLabel}>Living your values today</Text>
@@ -983,6 +1212,9 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     backgroundColor: "#FAFAF8",
   },
+  composerSpacer: {
+    height: 14,
+  },
   composerButton: {
     backgroundColor: "#556B4D",
     padding: 14,
@@ -994,6 +1226,11 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 16,
     fontWeight: "600",
+  },
+  valuesEmpty: {
+    fontSize: 13,
+    color: "#8B8B8B",
+    marginBottom: 20,
   },
   taskCard: {
     marginTop: 10,
@@ -1037,6 +1274,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     marginBottom: 8,
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
   },
   greeting: {
     fontSize: 16,

@@ -6,11 +6,8 @@ import {
   QUADRANT_ORDER,
   QUADRANTS,
   useQuadrantData,
-  VALUE_OPTIONS,
-  VALUE_STYLES,
   type Quadrant,
   type Task,
-  type Value,
 } from "@/components/quadrant-dashboard";
 
 type Range = "week" | "all";
@@ -53,7 +50,7 @@ function coachingLine(topQuadrant: Quadrant, topPercent: number): string {
 }
 
 export function InsightsScreen() {
-  const { tasks } = useQuadrantData();
+  const { tasks, valueColor } = useQuadrantData();
   const [range, setRange] = useState<Range>("week");
 
   const stats = useMemo(() => {
@@ -61,13 +58,13 @@ export function InsightsScreen() {
     const total = completed.length;
 
     const quadrantCounts: Record<Quadrant, number> = { Q1: 0, Q2: 0, Q3: 0, Q4: 0 };
-    const valueCounts = Object.fromEntries(VALUE_OPTIONS.map((v) => [v, 0])) as Record<Value, number>;
+    const valueCounts = new Map<string, number>();
     let valueMentions = 0;
 
     completed.forEach((task) => {
       quadrantCounts[task.quadrant] += 1;
       task.values.forEach((value) => {
-        valueCounts[value] += 1;
+        valueCounts.set(value, (valueCounts.get(value) ?? 0) + 1);
         valueMentions += 1;
       });
     });
@@ -82,8 +79,8 @@ export function InsightsScreen() {
     "Q1" as Quadrant,
   );
 
-  const valueRows = VALUE_OPTIONS.map((value) => ({ value, count: valueCounts[value] }))
-    .filter((row) => row.count > 0)
+  const valueRows = Array.from(valueCounts.entries())
+    .map(([value, count]) => ({ value, count }))
     .sort((a, b) => b.count - a.count);
 
   return (
@@ -164,7 +161,7 @@ export function InsightsScreen() {
                         <View style={styles.barTrack}>
                           <AnimatedBar
                             percent={p}
-                            color={VALUE_STYLES[row.value].backgroundColor}
+                            color={valueColor(row.value).backgroundColor}
                             style={styles.barFill}
                           />
                         </View>

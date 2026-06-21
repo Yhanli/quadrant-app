@@ -33,6 +33,7 @@ function RootNavigator() {
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="quadrant/[quadrant]" options={{ headerShown: false }} />
+        <Stack.Screen name="values" options={{ headerShown: false }} />
       </Stack>
     </QuadrantAppProvider>
   );
