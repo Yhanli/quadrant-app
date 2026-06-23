@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-
 
 import { PressableScale } from "@/components/animated";
 import { useQuadrantData, VALUE_PALETTE, type ValueDef } from "@/components/quadrant-dashboard";
+import { Fonts, softShadow } from "@/lib/theme";
 
 function Swatches({
   selectedIndex,
@@ -149,11 +150,11 @@ export function ValuesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F7F6F3",
+    backgroundColor: "transparent",
   },
   content: {
     paddingTop: 64,
-    paddingHorizontal: 20,
+    paddingHorizontal: 22,
     paddingBottom: 60,
   },
   backButton: {
@@ -169,9 +170,10 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   title: {
-    fontSize: 32,
-    fontWeight: "600",
-    color: "#2F2F2F",
+    fontFamily: Fonts.serif,
+    fontSize: 36,
+    color: "#2B2B2B",
+    letterSpacing: 0.2,
   },
   subtitle: {
     marginTop: 6,
@@ -182,13 +184,10 @@ const styles = StyleSheet.create({
   },
   valueCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 18,
+    borderRadius: 20,
     padding: 16,
     marginBottom: 12,
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 1,
+    ...softShadow,
   },
   valueRowTop: {
     flexDirection: "row",
@@ -234,13 +233,10 @@ const styles = StyleSheet.create({
   },
   addCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 18,
+    borderRadius: 20,
     padding: 16,
     marginTop: 10,
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 1,
+    ...softShadow,
   },
   addLabel: {
     fontSize: 15,

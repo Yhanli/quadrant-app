@@ -20,6 +20,7 @@ import { useAuth } from "@/components/auth-provider";
 import { DateField } from "@/components/date-field";
 import { formatDueDate } from "@/lib/date";
 import { supabase } from "@/lib/supabase";
+import { Fonts, softShadow } from "@/lib/theme";
 
 const USE_NATIVE_DRIVER = Platform.OS !== "web";
 
@@ -1103,36 +1104,34 @@ export function QuadrantAppProvider({ children }: { children: ReactNode }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F7F6F3",
+    backgroundColor: "transparent",
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingTop: 70,
-    paddingHorizontal: 20,
+    paddingTop: 76,
+    paddingHorizontal: 22,
     paddingBottom: 130,
   },
   title: {
-    fontSize: 34,
-    fontWeight: "600",
-    color: "#2F2F2F",
-    marginBottom: 24,
+    fontFamily: Fonts.serif,
+    fontSize: 40,
+    color: "#2B2B2B",
+    marginBottom: 26,
+    letterSpacing: 0.2,
   },
   matrix: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 12,
+    gap: 14,
   },
   box: {
     width: "48%",
     backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 14,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 2,
+    borderRadius: 22,
+    padding: 16,
+    ...softShadow,
   },
   fab: {
     position: "absolute",
@@ -1186,11 +1185,8 @@ const styles = StyleSheet.create({
     marginTop: 16,
     backgroundColor: "#FFFFFF",
     borderRadius: 20,
-    padding: 14,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 2,
+    padding: 16,
+    ...softShadow,
   },
   composerLabel: {
     fontSize: 15,
@@ -1327,9 +1323,9 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   modalTitle: {
-    fontSize: 24,
-    fontWeight: "600",
-    color: "#2F2F2F",
+    fontFamily: Fonts.serif,
+    fontSize: 28,
+    color: "#2B2B2B",
     marginBottom: 20,
   },
   input: {
@@ -1462,7 +1458,7 @@ const styles = StyleSheet.create({
   },
   detailContainer: {
     flex: 1,
-    backgroundColor: "#F7F6F3",
+    backgroundColor: "transparent",
   },
   detailScroll: {
     flex: 1,
@@ -1489,9 +1485,9 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   detailTitle: {
-    fontSize: 32,
-    fontWeight: "600",
-    color: "#2F2F2F",
+    fontFamily: Fonts.serif,
+    fontSize: 36,
+    color: "#2B2B2B",
   },
   detailDescription: {
     marginTop: 6,

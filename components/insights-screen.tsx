@@ -9,6 +9,7 @@ import {
   type Quadrant,
   type Task,
 } from "@/components/quadrant-dashboard";
+import { Fonts, softShadow } from "@/lib/theme";
 
 type Range = "week" | "all";
 
@@ -182,17 +183,18 @@ export function InsightsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F7F6F3",
+    backgroundColor: "transparent",
   },
   content: {
-    paddingTop: 70,
-    paddingHorizontal: 20,
+    paddingTop: 76,
+    paddingHorizontal: 22,
     paddingBottom: 40,
   },
   title: {
-    fontSize: 32,
-    fontWeight: "600",
-    color: "#2F2F2F",
+    fontFamily: Fonts.serif,
+    fontSize: 38,
+    color: "#2B2B2B",
+    letterSpacing: 0.2,
   },
   subtitle: {
     marginTop: 6,
@@ -224,19 +226,17 @@ const styles = StyleSheet.create({
     color: "#2F2F2F",
   },
   headlineCard: {
-    marginTop: 20,
+    marginTop: 22,
     backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 18,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 2,
+    borderRadius: 22,
+    padding: 22,
+    ...softShadow,
   },
   headlineText: {
-    fontSize: 17,
-    lineHeight: 24,
-    color: "#2F2F2F",
+    fontFamily: Fonts.serifRegular,
+    fontSize: 21,
+    lineHeight: 30,
+    color: "#2B2B2B",
   },
   headlineMeta: {
     marginTop: 10,
@@ -252,13 +252,10 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 16,
+    borderRadius: 22,
+    padding: 18,
     gap: 14,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 2,
+    ...softShadow,
   },
   barRow: {
     flexDirection: "row",

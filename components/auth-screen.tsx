@@ -13,6 +13,7 @@ import {
 
 import { FadeInView, PressableScale } from "@/components/animated";
 import { useAuth } from "@/components/auth-provider";
+import { Fonts, softShadow } from "@/lib/theme";
 
 type Mode = "signIn" | "signUp";
 
@@ -137,23 +138,21 @@ export function AuthScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F7F6F3",
+    backgroundColor: "transparent",
     justifyContent: "center",
     paddingHorizontal: 24,
   },
   card: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 24,
-    padding: 28,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 2,
+    borderRadius: 26,
+    padding: 30,
+    ...softShadow,
   },
   brand: {
-    fontSize: 32,
-    fontWeight: "600",
-    color: "#2F2F2F",
+    fontFamily: Fonts.serif,
+    fontSize: 40,
+    color: "#2B2B2B",
+    letterSpacing: 0.2,
   },
   tagline: {
     fontSize: 14,
