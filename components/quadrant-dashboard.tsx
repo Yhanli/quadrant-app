@@ -18,6 +18,7 @@ import {
 import { FadeInView, PressableScale } from "@/components/animated";
 import { useAuth } from "@/components/auth-provider";
 import { DateField } from "@/components/date-field";
+import { ProgressRing } from "@/components/progress-ring";
 import { ScreenBackground } from "@/components/screen-background";
 import { formatDueDate } from "@/lib/date";
 import { supabase } from "@/lib/supabase";
@@ -945,6 +946,19 @@ export function HomeScreen() {
   const completedToday = tasks.filter(isCompletedToday);
   const displayName = session?.user.email?.split("@")[0] ?? "there";
 
+  // Daily completion ring: today's finishes against the day's open plate
+  // (still-incomplete tasks + what's already done today).
+  const doneToday = completedToday.length;
+  const activeCount = tasks.filter((task) => !task.completed).length;
+  const dayTotal = doneToday + activeCount;
+  const dayProgress = dayTotal > 0 ? doneToday / dayTotal : 0;
+  const ringCaption =
+    dayTotal === 0
+      ? "Add a task to begin your day."
+      : dayProgress >= 1
+        ? "A full ring — beautifully done. 🌱"
+        : `${activeCount} ${activeCount === 1 ? "task" : "tasks"} left today.`;
+
   const closeEditor = () => {
     setEditingTask(null);
     setComposing(false);
@@ -971,6 +985,14 @@ export function HomeScreen() {
           </View>
           <Text style={styles.title}>Quadrant</Text>
           <Text style={styles.focusLabel}>Living your values today</Text>
+        </FadeInView>
+
+        <FadeInView delay={90} style={styles.ringSection}>
+          <ProgressRing progress={dayProgress} size={172} strokeWidth={16}>
+            <Text style={styles.ringValue}>{doneToday}</Text>
+            <Text style={styles.ringTotal}>of {dayTotal} today</Text>
+          </ProgressRing>
+          <Text style={styles.ringCaption}>{ringCaption}</Text>
         </FadeInView>
 
         <View style={styles.matrix}>
@@ -1290,6 +1312,28 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#8B8B8B",
     marginTop: 8,
+  },
+  ringSection: {
+    alignItems: "center",
+    marginTop: 22,
+    marginBottom: 30,
+  },
+  ringValue: {
+    fontFamily: Fonts.serif,
+    fontSize: 46,
+    color: "#2B2B2B",
+    lineHeight: 52,
+  },
+  ringTotal: {
+    fontSize: 13,
+    color: "#8B8B8B",
+    marginTop: 2,
+  },
+  ringCaption: {
+    marginTop: 16,
+    fontSize: 14,
+    color: "#6F6A60",
+    fontWeight: "500",
   },
   completedSection: {
     marginTop: 26,
