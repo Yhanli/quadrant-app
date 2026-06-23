@@ -7,7 +7,6 @@ import {
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, View } from 'react-native';
 import 'react-native-reanimated';
 
 import { AuthProvider, useAuth } from '@/components/auth-provider';
@@ -24,11 +23,7 @@ function RootNavigator() {
   const { session, isLoading } = useAuth();
 
   if (isLoading) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color="#556B4D" />
-      </View>
-    );
+    return <ScreenBackground />;
   }
 
   if (!session) {
@@ -37,7 +32,7 @@ function RootNavigator() {
 
   return (
     <QuadrantAppProvider>
-      <Stack screenOptions={{ contentStyle: { backgroundColor: 'transparent' } }}>
+      <Stack screenOptions={{ contentStyle: { backgroundColor: '#F4F0E8' } }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="quadrant/[quadrant]" options={{ headerShown: false }} />
         <Stack.Screen name="values" options={{ headerShown: false }} />
@@ -54,20 +49,15 @@ export default function RootLayout() {
     Fraunces_600SemiBold,
   });
 
+  if (!fontsLoaded) {
+    return <ScreenBackground />;
+  }
+
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      {/* One warm gradient behind every screen; screens render transparent. */}
-      <ScreenBackground>
-        {fontsLoaded ? (
-          <AuthProvider>
-            <RootNavigator />
-          </AuthProvider>
-        ) : (
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-            <ActivityIndicator color="#556B4D" />
-          </View>
-        )}
-      </ScreenBackground>
+      <AuthProvider>
+        <RootNavigator />
+      </AuthProvider>
       <StatusBar style="auto" />
     </ThemeProvider>
   );

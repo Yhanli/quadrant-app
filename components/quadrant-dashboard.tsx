@@ -18,6 +18,7 @@ import {
 import { FadeInView, PressableScale } from "@/components/animated";
 import { useAuth } from "@/components/auth-provider";
 import { DateField } from "@/components/date-field";
+import { ScreenBackground } from "@/components/screen-background";
 import { formatDueDate } from "@/lib/date";
 import { supabase } from "@/lib/supabase";
 import { Fonts, softShadow } from "@/lib/theme";
@@ -950,7 +951,7 @@ export function HomeScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <ScreenBackground style={styles.container}>
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -1018,7 +1019,7 @@ export function HomeScreen() {
           closeEditor();
         }}
       />
-    </View>
+    </ScreenBackground>
   );
 }
 
@@ -1030,12 +1031,12 @@ export function QuadrantDetailScreen() {
 
   if (!isQuadrant(quadrantParam)) {
     return (
-      <View style={styles.detailContainer}>
+      <ScreenBackground style={styles.detailContainer}>
         <Text style={styles.detailTitle}>Quadrant not found</Text>
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <Text style={styles.backButtonText}>← Back</Text>
         </Pressable>
-      </View>
+      </ScreenBackground>
     );
   }
 
@@ -1043,7 +1044,7 @@ export function QuadrantDetailScreen() {
   const quadrantTasks = tasks.filter((task) => task.quadrant === quadrantParam);
 
   return (
-    <View style={styles.detailContainer}>
+    <ScreenBackground style={styles.detailContainer}>
       <ScrollView
         style={styles.detailScroll}
         contentContainerStyle={styles.detailContent}
@@ -1093,7 +1094,7 @@ export function QuadrantDetailScreen() {
           setEditingTask(null);
         }}
       />
-    </View>
+    </ScreenBackground>
   );
 }
 

@@ -13,6 +13,7 @@ import {
 
 import { FadeInView, PressableScale } from "@/components/animated";
 import { useAuth } from "@/components/auth-provider";
+import { ScreenBackground } from "@/components/screen-background";
 import { Fonts, softShadow } from "@/lib/theme";
 
 type Mode = "signIn" | "signUp";
@@ -68,10 +69,11 @@ export function AuthScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
+    <ScreenBackground>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
       <FadeInView style={styles.card}>
         <Text style={styles.brand}>Quadrant</Text>
         <Text style={styles.tagline}>Spend more time on what matters.</Text>
@@ -131,7 +133,8 @@ export function AuthScreen() {
           </Text>
         </Pressable>
       </FadeInView>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </ScreenBackground>
   );
 }
 

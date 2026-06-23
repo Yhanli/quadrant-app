@@ -9,7 +9,7 @@ export function ScreenBackground({
   children,
   style,
 }: {
-  children: ReactNode;
+  children?: ReactNode;
   style?: StyleProp<ViewStyle>;
 }) {
   return (

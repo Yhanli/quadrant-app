@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-
 
 import { PressableScale } from "@/components/animated";
 import { useQuadrantData, VALUE_PALETTE, type ValueDef } from "@/components/quadrant-dashboard";
+import { ScreenBackground } from "@/components/screen-background";
 import { Fonts, softShadow } from "@/lib/theme";
 
 function Swatches({
@@ -96,7 +97,7 @@ export function ValuesScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <ScreenBackground style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -143,7 +144,7 @@ export function ValuesScreen() {
           </PressableScale>
         </View>
       </ScrollView>
-    </View>
+    </ScreenBackground>
   );
 }
 

@@ -9,6 +9,7 @@ import {
   type Quadrant,
   type Task,
 } from "@/components/quadrant-dashboard";
+import { ScreenBackground } from "@/components/screen-background";
 import { Fonts, softShadow } from "@/lib/theme";
 
 type Range = "week" | "all";
@@ -85,7 +86,7 @@ export function InsightsScreen() {
     .sort((a, b) => b.count - a.count);
 
   return (
-    <View style={styles.container}>
+    <ScreenBackground style={styles.container}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <FadeInView>
           <Text style={styles.title}>Reflection</Text>
@@ -176,7 +177,7 @@ export function InsightsScreen() {
           </>
         )}
       </ScrollView>
-    </View>
+    </ScreenBackground>
   );
 }
 
