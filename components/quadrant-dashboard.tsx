@@ -20,7 +20,7 @@ import { useAuth } from "@/components/auth-provider";
 import { DateField } from "@/components/date-field";
 import { ProgressRing } from "@/components/progress-ring";
 import { ScreenBackground } from "@/components/screen-background";
-import { formatDueDate } from "@/lib/date";
+import { formatDueDate, formatTimestamp, relativeAge } from "@/lib/date";
 import { supabase } from "@/lib/supabase";
 import { Fonts, softShadow } from "@/lib/theme";
 
@@ -49,6 +49,7 @@ export type Task = {
   dueDate: string;
   completed: boolean;
   completedAt: string | null;
+  createdAt: string;
 };
 
 type TaskDraft = {
@@ -134,8 +135,18 @@ function getMoreCount(tasks: Task[]) {
   return Math.max(getIncompleteTasks(tasks).length - 3, 0);
 }
 
+function taskMetaLabel(task: Task): string | null {
+  if (task.completed) {
+    return task.completedAt ? `Done ${formatTimestamp(task.completedAt)}` : null;
+  }
+  if (!task.createdAt) return null;
+  const age = relativeAge(task.createdAt);
+  return age === "today" ? "Added today" : `${age} old`;
+}
+
 function TaskCardContent({ task }: { task: Task }) {
   const { valueColor } = useQuadrantData();
+  const metaLabel = taskMetaLabel(task);
 
   return (
     <>
@@ -146,6 +157,8 @@ function TaskCardContent({ task }: { task: Task }) {
       {task.dueDate ? (
         <Text style={styles.taskDueDate}>Due {formatDueDate(task.dueDate)}</Text>
       ) : null}
+
+      {metaLabel ? <Text style={styles.taskMeta}>{metaLabel}</Text> : null}
 
       <View style={styles.taskTags}>
         {task.values.map((value) => {
@@ -200,6 +213,7 @@ function rowToTask(row: TaskRow): Task {
     dueDate: row.due_date ?? "",
     completed: row.completed,
     completedAt: row.completed_at,
+    createdAt: row.created_at,
   };
 }
 
@@ -1272,6 +1286,10 @@ const styles = StyleSheet.create({
   taskDueDate: {
     fontSize: 11,
     color: "#7C7C7C",
+  },
+  taskMeta: {
+    fontSize: 11,
+    color: "#A29C90",
   },
   taskTags: {
     flexDirection: "row",
