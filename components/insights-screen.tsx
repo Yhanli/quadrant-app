@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { type DimensionValue, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { AnimatedBar, FadeInView } from "@/components/animated";
 import {
@@ -10,11 +10,31 @@ import {
   type Task,
 } from "@/components/quadrant-dashboard";
 import { ScreenBackground } from "@/components/screen-background";
+import { toISODate } from "@/lib/date";
 import { Fonts, softShadow } from "@/lib/theme";
 
 type Range = "week" | "all";
 
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const WEEK_MS = 7 * DAY_MS;
+const DAY_INITIALS = ["S", "M", "T", "W", "T", "F", "S"];
+
+function StatTile({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+}) {
+  return (
+    <View style={styles.statTile}>
+      <Text style={[styles.statValue, accent && styles.statValueAccent]}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+    </View>
+  );
+}
 
 // Calm, muted bar colours per quadrant (aligned with the app's palette).
 const QUADRANT_BAR_COLOR: Record<Quadrant, string> = {
@@ -71,10 +91,64 @@ export function InsightsScreen() {
       });
     });
 
-    return { total, quadrantCounts, valueCounts, valueMentions };
+    // Average days from creation to completion, over completed-in-range tasks.
+    const durations = completed
+      .filter((task) => task.completedAt && task.createdAt)
+      .map(
+        (task) =>
+          (new Date(task.completedAt as string).getTime() - new Date(task.createdAt).getTime()) /
+          DAY_MS,
+      )
+      .filter((days) => days >= 0);
+    const avgDaysToDone =
+      durations.length > 0
+        ? Math.round((durations.reduce((sum, days) => sum + days, 0) / durations.length) * 10) / 10
+        : null;
+
+    // Current-state counts (independent of the week/all-time toggle).
+    const openTasks = tasks.filter((task) => !task.completed);
+    const openCount = openTasks.length;
+    const todayISO = toISODate(new Date());
+    const overdueCount = openTasks.filter(
+      (task) => task.dueDate && task.dueDate < todayISO,
+    ).length;
+
+    // Completions per day for the last 7 calendar days.
+    const doneWithDate = tasks.filter((task) => task.completed && task.completedAt);
+    const last7 = Array.from({ length: 7 }, (_, index) => {
+      const day = new Date();
+      day.setDate(day.getDate() - (6 - index));
+      const key = toISODate(day);
+      const count = doneWithDate.filter(
+        (task) => toISODate(new Date(task.completedAt as string)) === key,
+      ).length;
+      return { label: DAY_INITIALS[day.getDay()], count, isToday: index === 6 };
+    });
+
+    return {
+      total,
+      quadrantCounts,
+      valueCounts,
+      valueMentions,
+      avgDaysToDone,
+      openCount,
+      overdueCount,
+      last7,
+    };
   }, [tasks, range]);
 
-  const { total, quadrantCounts, valueCounts, valueMentions } = stats;
+  const {
+    total,
+    quadrantCounts,
+    valueCounts,
+    valueMentions,
+    avgDaysToDone,
+    openCount,
+    overdueCount,
+    last7,
+  } = stats;
+
+  const maxDay = Math.max(1, ...last7.map((day) => day.count));
 
   const topQuadrant = QUADRANT_ORDER.reduce(
     (best, quadrant) => (quadrantCounts[quadrant] > quadrantCounts[best] ? quadrant : best),
@@ -109,6 +183,19 @@ export function InsightsScreen() {
             );
           })}
         </View>
+
+        <FadeInView delay={40} style={styles.statsGrid}>
+          <StatTile
+            label={range === "week" ? "Done this week" : "Done all time"}
+            value={`${total}`}
+          />
+          <StatTile
+            label="Avg. days to done"
+            value={avgDaysToDone !== null ? `${avgDaysToDone}` : "—"}
+          />
+          <StatTile label="Open now" value={`${openCount}`} />
+          <StatTile label="Overdue" value={`${overdueCount}`} accent={overdueCount > 0} />
+        </FadeInView>
 
         {total === 0 ? (
           <FadeInView style={styles.headlineCard}>
@@ -176,6 +263,34 @@ export function InsightsScreen() {
             </FadeInView>
           </>
         )}
+
+        <FadeInView delay={220}>
+          <Text style={styles.sectionTitle}>Last 7 days</Text>
+          <View style={styles.card}>
+            <View style={styles.weekRow}>
+              {last7.map((day, index) => {
+                const height = (`${Math.round((day.count / maxDay) * 100)}%` as DimensionValue);
+                return (
+                  <View key={index} style={styles.dayCol}>
+                    <View style={styles.dayBarTrack}>
+                      <View
+                        style={[
+                          styles.dayBarFill,
+                          { height },
+                          day.isToday && styles.dayBarFillToday,
+                        ]}
+                      />
+                    </View>
+                    <Text style={styles.dayCount}>{day.count}</Text>
+                    <Text style={[styles.dayLabel, day.isToday && styles.dayLabelToday]}>
+                      {day.label}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        </FadeInView>
       </ScrollView>
     </ScreenBackground>
   );
@@ -225,6 +340,74 @@ const styles = StyleSheet.create({
   },
   toggleTextActive: {
     color: "#2F2F2F",
+  },
+  statsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    marginTop: 22,
+  },
+  statTile: {
+    width: "47%",
+    flexGrow: 1,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    ...softShadow,
+  },
+  statValue: {
+    fontFamily: Fonts.serif,
+    fontSize: 30,
+    color: "#2B2B2B",
+  },
+  statValueAccent: {
+    color: "#A6584E",
+  },
+  statLabel: {
+    marginTop: 2,
+    fontSize: 12,
+    color: "#8B8B8B",
+  },
+  weekRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
+  },
+  dayCol: {
+    flex: 1,
+    alignItems: "center",
+  },
+  dayBarTrack: {
+    width: 10,
+    height: 76,
+    borderRadius: 999,
+    backgroundColor: "#F0EEE8",
+    justifyContent: "flex-end",
+    overflow: "hidden",
+  },
+  dayBarFill: {
+    width: 10,
+    borderRadius: 999,
+    backgroundColor: "#A9BE9C",
+  },
+  dayBarFillToday: {
+    backgroundColor: "#556B4D",
+  },
+  dayCount: {
+    marginTop: 8,
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#6F6A60",
+  },
+  dayLabel: {
+    marginTop: 2,
+    fontSize: 11,
+    color: "#9A968C",
+  },
+  dayLabelToday: {
+    color: "#556B4D",
+    fontWeight: "700",
   },
   headlineCard: {
     marginTop: 22,
