@@ -6,6 +6,7 @@ import 'react-native-reanimated';
 
 import { AuthProvider, useAuth } from '@/components/auth-provider';
 import { AuthScreen } from '@/components/auth-screen';
+import { ListsProvider } from '@/components/lists-provider';
 import { QuadrantAppProvider } from '@/components/quadrant-dashboard';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -30,10 +31,13 @@ function RootNavigator() {
 
   return (
     <QuadrantAppProvider>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="quadrant/[quadrant]" options={{ headerShown: false }} />
-      </Stack>
+      <ListsProvider>
+        <Stack>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="quadrant/[quadrant]" options={{ headerShown: false }} />
+          <Stack.Screen name="list/[list]" options={{ headerShown: false }} />
+        </Stack>
+      </ListsProvider>
     </QuadrantAppProvider>
   );
 }
